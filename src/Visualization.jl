@@ -2,40 +2,42 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
-function speed_color(v::Float64, vmax::Float64)
-    t = clamp(v / vmax, 0.0, 1.0)
-    r = t
-    g = 1.0 - abs(2t - 1.0)
-    b = 1.0 - t
-    return RGB(r, g, b)
-end
-
-function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int)
-    speeds = speed.(particles)
-    vmax   = max(maximum(speeds), 1e-6)
+function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_reactions::Int)
+    sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
+    sp_labels = ["A (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius))",
+                 "B (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius))",
+                 "C (m=$(SPECIES[3].mass), r=$(SPECIES[3].radius))"]
 
     plt = plot(
         xlims        = (0, box.width),
         ylims        = (0, box.height),
         aspect_ratio = :equal,
-        legend       = false,
+        legend       = :topright,
         grid         = false,
         framestyle   = :box,
         background_color_inside = :black,
         background_color        = :black,
         foreground_color        = :white,
-        title         = @sprintf("step %d", step_idx),
+        title          = @sprintf("step %d  |  reactions: %d", step_idx, total_reactions),
         titlefontcolor = :white,
-        titlefontsize  = 10,
+        titlefontsize  = 9,
         tickfontcolor  = :white,
-        size           = (520, 520),
+        legendfontcolor = :white,
+        legendbackground_color = RGBA(0,0,0,0.5),
+        size           = (580, 580),
     )
 
-    for p in particles
-        c = speed_color(speed(p), vmax)
-        r = p.radius
+    # One invisible scatter per species for the legend
+    for (sp, col, lbl) in zip(1:3, sp_colors, sp_labels)
+        scatter!(plt, Float64[], Float64[];
+            markercolor=col, markerstrokewidth=0,
+            markersize=5, label=lbl)
+    end
 
-        # Main position + torus ghost copies near edges
+    for p in particles
+        col = sp_colors[p.species]
+        r   = radius(p)
+
         draw_x = [p.pos[1]]
         draw_y = [p.pos[2]]
         p.pos[1] < r             && push!(draw_x, p.pos[1] + box.width)
@@ -45,23 +47,25 @@ function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int)
 
         for x in draw_x, y in draw_y
             scatter!(plt, [x], [y];
-                markersize        = r * 0.52,
-                markercolor       = c,
-                markerstrokewidth = 0)
+                markersize        = r * 0.55,
+                markercolor       = col,
+                markerstrokewidth = 0,
+                label             = false)
         end
 
         # Velocity arrow
         plot!(plt,
-            [p.pos[1], p.pos[1] + p.vel[1] * 1.5],
-            [p.pos[2], p.pos[2] + p.vel[2] * 1.5];
-            lc=c, lw=0.8, alpha=0.55)
+            [p.pos[1], p.pos[1] + p.vel[1] * 1.2],
+            [p.pos[2], p.pos[2] + p.vel[2] * 1.2];
+            lc=col, lw=0.7, alpha=0.45, label=false)
     end
 
     return plt
 end
 
-function plot_thermodynamics(times, KE_hist, T_hist, p_hist; path="thermodynamics.png")
-    plt = plot(layout=(3,1), size=(700, 580),
+function plot_thermodynamics(times, KE_hist, T_hist, p_hist, NA_hist, NB_hist, NC_hist;
+                              path="thermodynamics.png")
+    plt = plot(layout=(4,1), size=(750, 680),
         background_color = :white,
         left_margin  = 8Plots.mm,
         bottom_margin = 4Plots.mm)
@@ -69,7 +73,7 @@ function plot_thermodynamics(times, KE_hist, T_hist, p_hist; path="thermodynamic
     plot!(plt[1], times, KE_hist;
         lc=:steelblue, lw=1.5, legend=:topright,
         label="KE", ylabel="Total KE",
-        title="Thermodynamic observables")
+        title="Thermodynamic observables — reactive ideal gas")
     hline!(plt[1], [mean(KE_hist)]; lc=:red, ls=:dash, lw=1, label="⟨KE⟩")
 
     plot!(plt[2], times, T_hist;
@@ -79,38 +83,48 @@ function plot_thermodynamics(times, KE_hist, T_hist, p_hist; path="thermodynamic
 
     plot!(plt[3], times, p_hist;
         lc=:mediumseagreen, lw=1.2, legend=false,
-        xlabel="Time", ylabel="|p| total",
-        label="|p|")
+        ylabel="|p| total", label="|p|")
+
+    plot!(plt[4], times, NA_hist; lc=:tomato,          lw=1.5, label="N_A",
+        ylabel="Population", xlabel="Time", legend=:topright)
+    plot!(plt[4], times, NB_hist; lc=:mediumseagreen,  lw=1.5, label="N_B")
+    plot!(plt[4], times, NC_hist; lc=:cornflowerblue,  lw=1.5, label="N_C")
 
     savefig(plt, path)
     println("  Saved thermo     → $path")
     return plt
 end
 
-function plot_speed_distribution(particles::Vector{Particle};
-                                  T_eq=1.0, mass=1.0, path="speed_dist.png")
-    speeds  = speed.(particles)
-    v_range = range(0, maximum(speeds)*1.4, length=300)
-    mb      = (mass ./ T_eq) .* v_range .* exp.(-(mass .* v_range.^2) ./ (2T_eq))
+function plot_speed_distribution(particles::Vector{Particle}; T_eq=1.0, path="speed_dist.png")
+    sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
+    sp_names  = [SPECIES[k].name for k in 1:3]
 
-    plt = plot(size=(600, 380),
+    plt = plot(size=(700, 420),
         background_color = :white,
         left_margin  = 6Plots.mm,
-        bottom_margin = 6Plots.mm)
+        bottom_margin = 6Plots.mm,
+        title = "Speed distributions by species")
 
-    histogram!(plt, speeds;
-        normalize  = :pdf,
-        bins       = 18,
-        fillcolor  = :steelblue,
-        fillalpha  = 0.55,
-        label      = "Simulation",
-        xlabel     = "Speed  |v|",
-        ylabel     = "P(v)",
-        title      = "Speed distribution")
+    for sp in 1:3
+        group = filter(p -> p.species == sp, particles)
+        isempty(group) && continue
+        speeds  = speed.(group)
+        m       = SPECIES[sp].mass
+        v_range = range(0, maximum(speeds)*1.4, length=300)
+        mb      = (m ./ T_eq) .* v_range .* exp.(-(m .* v_range.^2) ./ (2T_eq))
 
-    plot!(plt, v_range, mb;
-        lc=:red, lw=2.2,
-        label=@sprintf("Maxwell-Boltzmann (T = %.3f)", T_eq))
+        histogram!(plt, speeds;
+            normalize  = :pdf,
+            bins       = 14,
+            fillcolor  = sp_colors[sp],
+            fillalpha  = 0.40,
+            label      = "$(sp_names[sp]) sim",
+            xlabel     = "Speed |v|",
+            ylabel     = "P(v)")
+        plot!(plt, v_range, mb;
+            lc=sp_colors[sp], lw=2.0, ls=:dash,
+            label=@sprintf("%s MB (T=%.3f)", sp_names[sp], T_eq))
+    end
 
     savefig(plt, path)
     println("  Saved speed dist → $path")

@@ -2,15 +2,21 @@
 # main.jl
 # ─────────────────────────────────────────────────
 
-# Incluimos el archivo que contiene la definición de tu módulo
+# Carga del módulo principal
 include("src/IdealGas.jl")
 
-# Ejecutamos la función run contenida dentro de tu módulo
+# Ejecución de la simulación con parámetros personalizados
 IdealGas.run(
-    N           = 100,
-    n_steps     = 1200,
+    N_A         = 160,
+    N_B         = 5,
+    N_C         = 5,
+    Lx          = 120.0,
+    Ly          = 120.0,
+    T_init      = 2.0,
+    dt          = 0.2,
+    n_steps     = 2000,
+    p_react     = 0.05,
     save_every  = 5,
-    radius      = 3.0,
-    out_dir     = "ideal_gas_output",
+    out_dir     = "reactive_gas_output",
     save_frames = false,
 )
