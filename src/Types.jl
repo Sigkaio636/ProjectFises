@@ -3,9 +3,9 @@
 # ─────────────────────────────────────────────────
 
 const SPECIES = (
-    A = (mass=1.0, radius=2.0, energy=-25, color=:lightcoral, name="H2O"),
-    B = (mass=1.0, radius=2.0, energy=0, color=:lightgreen, name="H3O+"),
-    C = (mass=1.0, radius=2.0, energy=0, color=:lightskyblue, name="OH-"),
+    A = (mass=1.0, radius=2.0, energy=0, color=:mediumseagreen, name="H2O"),
+    B = (mass=1.0, radius=2.0, energy=0, color=:tomato, name="H3O+"),
+    C = (mass=1.0, radius=2.0, energy=0, color=:cornflowerblue, name="OH-"),
 )
 
 mutable struct Particle
