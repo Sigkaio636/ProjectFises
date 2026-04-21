@@ -245,11 +245,11 @@ One simulation step:
   2. Advance positions with velocity-Verlet (no forces, so just free streaming).
   3. Apply periodic boundary conditions.
 
-Returns (n_elastic, n_reactions).
+Returns (n_collitions, n_reactions).
 """
 function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Float64)
     n          = length(particles)
-    n_elastic  = 0
+    n_collitions  = 0
     n_reactions = 0
 
     for ii in 1:n-1, jj in ii+1:n
@@ -263,10 +263,9 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
         d2 > sigma^2 && continue
         d2 < 1e-14   && continue
 
-        # A+A pair: try reaction before elastic bounce
+        # H2O+H2O pair: try reaction before elastic bounce
         if pi.species == 1 && pj.species == 1
-            # if react_AA!(pi, pj, p_react)
-            if react_chem!(pi, pj, 2,3,p_react)
+            if react_chem!(pi, pj, 2, 3, p_react)
                 n_reactions += 1
                 # No positional correction — see collide! docstring.
                 continue
@@ -275,7 +274,7 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
 
         # Standard elastic collision
         if collide!(pi, pj, box)
-            n_elastic += 1
+            n_collitions += 1
         end
     end
 
@@ -286,7 +285,7 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
         wrap!(p, box)
     end
 
-    return n_elastic, n_reactions
+    return n_collitions, n_reactions
 end
 
 function diagnostics(particles::Vector{Particle})
@@ -294,8 +293,8 @@ function diagnostics(particles::Vector{Particle})
     px   = sum(mass(p) * p.vel[1] for p in particles)
     py   = sum(mass(p) * p.vel[2] for p in particles)
     T    = KE / length(particles)
-    N_A  = count(p -> p.species == 1, particles)
-    N_B  = count(p -> p.species == 2, particles)
-    N_C  = count(p -> p.species == 3, particles)
-    return (; KE, px, py, T, N_A, N_B, N_C)
+    N_H2O  = count(p -> p.species == 1, particles)
+    N_H3O  = count(p -> p.species == 2, particles)
+    N_OH  = count(p -> p.species == 3, particles)
+    return (; KE, px, py, T, N_H2O, N_H3O, N_OH)
 end
