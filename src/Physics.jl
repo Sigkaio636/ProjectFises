@@ -156,6 +156,70 @@ function react_AA!(i::Particle, j::Particle, p_react::Float64)
     return true
 end
 
+function react_acid_base!(i::Particle, j::particle, p_react::Float64)
+    # comprueba que sean el tipo de particulas correcta
+    if ((i.species == 2 && j.species == 3) || (i.species == 3 && j.species == 2)) || return false
+    
+    if (i.species == 3 && j.species == 2)
+        k = i
+        i = j
+        j = k
+    end
+
+    # probabilidad de reaccionar
+    rand() > p_react && return false
+
+    #-------------------- actualizar valores---------------------------
+    m_h2o = SPECIES[1].mass
+    m_h3o = SPECIES[2].mass
+    m_oh = SPECIES[3].mass
+
+    M_old = m_h3o + m_oh
+    M_new = 2*m_h2o
+
+    # ── 1. Conservación estricta del Momento Total ─────────────────────────
+    # Calculamos el momento absoluto previo a la reacción
+    P_x = m_h30 * i.vel[1] + m_oh * j.vel[1]
+    P_y = m_h30 * i.vel[2] + m_oh * j.vel[2]
+
+    # La nueva velocidad del CM debe ajustarse si la masa cambió
+    vcm_x_new = P_x / M_new
+    vcm_y_new = P_y / M_new
+
+    # ── 2. Conservación estricta de la Energía Cinética ────────────────────
+    KE_total = 0.5 * m_h30 * (i.vel[1]^2 + i.vel[2]^2) + 
+               0.5 * m_oh * (j.vel[1]^2 + j.vel[2]^2)
+
+    # Energía que "consume" el desplazamiento del nuevo centro de masas
+    KE_cm_new = 0.5 * M_new * (vcm_x_new^2 + vcm_y_new^2)
+    
+    # Energía restante disponible para la repulsión de los productos
+    KE_rel = KE_total - KE_cm_new
+
+    # Guardia termodinámica: si la masa aumenta tanto que requiere más energía 
+    # de la que existe, la reacción es "muy endotérmica" y no puede ocurrir.
+    KE_rel < 0.0 && return false
+
+    # ── 3. Reconstruir velocidades de los productos B y C ──────────────────
+    mu_BC   = m_B * m_C / M_new
+    vrel_cm = sqrt(2.0 * KE_rel / mu_BC)
+
+    theta = 2π * rand()
+    rx = vrel_cm * cos(theta)
+    ry = vrel_cm * sin(theta)
+
+    fB = m_C / M_new
+    fC = m_B / M_new
+
+    i.vel[1] = vcm_x_new + fB * rx;  i.vel[2] = vcm_y_new + fB * ry
+    j.vel[1] = vcm_x_new - fC * rx;  j.vel[2] = vcm_y_new - fC * ry
+
+    # ── 4. Cambiar especies ────────────────────────────────────────────────
+    i.species = 2   # becomes B
+    j.species = 3   # becomes C
+
+end
+
 """
 One simulation step:
   1. Detect and resolve all pairwise overlaps.
