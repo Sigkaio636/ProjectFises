@@ -237,16 +237,8 @@ function react_chem!(i::Particle, j::Particle, iout_sp::Int, jout_sp::Int, p_rea
     return true
 end
 
-function react_acid_base!(i::Particle, j::particle, p_react::Float64)
-    # comprueba que sean el tipo de particulas correcta
-    if ((i.species == 2 && j.species == 3) || (i.species == 3 && j.species == 2)) || return false
-    
-    if (i.species == 3 && j.species == 2)
-        k = i
-        i = j
-        j = k
-    end
-
+# PRE: the code assumes h3o and oh are correctly assigned and in the correct order
+function react_acid_base!(h3o::Particle, oh::particle, p_react::Float64)
     # probabilidad de reaccionar
     rand() > p_react && return false
 
@@ -260,16 +252,16 @@ function react_acid_base!(i::Particle, j::particle, p_react::Float64)
 
     # ── 1. Conservación estricta del Momento Total ─────────────────────────
     # Calculamos el momento absoluto previo a la reacción
-    P_x = m_h30 * i.vel[1] + m_oh * j.vel[1]
-    P_y = m_h30 * i.vel[2] + m_oh * j.vel[2]
+    P_x = m_h30 * h30.vel[1] + m_oh * oh.vel[1]
+    P_y = m_h30 * h30.vel[2] + m_oh * oh.vel[2]
 
     # La nueva velocidad del CM debe ajustarse si la masa cambió
     vcm_x_new = P_x / M_new
     vcm_y_new = P_y / M_new
 
     # ── 2. Conservación estricta de la Energía Cinética ────────────────────
-    KE_total = 0.5 * m_h30 * (i.vel[1]^2 + i.vel[2]^2) + 
-               0.5 * m_oh * (j.vel[1]^2 + j.vel[2]^2)
+    KE_total = 0.5 * m_h30 * (h3o.vel[1]^2 + h3o.vel[2]^2) + 
+               0.5 * m_oh * (oh.vel[1]^2 + oh.vel[2]^2)
 
     # Energía que "consume" el desplazamiento del nuevo centro de masas
     KE_cm_new = 0.5 * M_new * (vcm_x_new^2 + vcm_y_new^2)
@@ -282,22 +274,23 @@ function react_acid_base!(i::Particle, j::particle, p_react::Float64)
     KE_rel < 0.0 && return false
 
     # ── 3. Reconstruir velocidades de los productos B y C ──────────────────
-    mu_BC   = m_B * m_C / M_new
+    mu_BC   = m_h2o*m_h2o / M_new # = m_h2o/2
     vrel_cm = sqrt(2.0 * KE_rel / mu_BC)
 
     theta = 2π * rand()
     rx = vrel_cm * cos(theta)
     ry = vrel_cm * sin(theta)
 
-    fB = m_C / M_new
-    fC = m_B / M_new
+    f = 0.5 # = m_h2o/M_new
 
-    i.vel[1] = vcm_x_new + fB * rx;  i.vel[2] = vcm_y_new + fB * ry
-    j.vel[1] = vcm_x_new - fC * rx;  j.vel[2] = vcm_y_new - fC * ry
+    h3o.vel[1] = vcm_x_new + f * rx;  h3o.vel[2] = vcm_y_new + f * ry
+    oh.vel[1] = vcm_x_new - f * rx;  oh.vel[2] = vcm_y_new - f * ry
 
-    # ── 4. Cambiar especies ────────────────────────────────────────────────
-    i.species = 2   # becomes B
-    j.species = 3   # becomes C
+    # Actualizar tipo de molécula
+    h3o.species = 1
+    oh.species = 1
+
+    return true
 
 end
 
