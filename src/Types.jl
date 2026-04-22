@@ -2,20 +2,16 @@
 # src/Types.jl
 # ─────────────────────────────────────────────────
 
-"""
-Each species has a fixed mass, radius, and display colour.
-Species indices: 1 = A, 2 = B, 3 = C
-"""
 const SPECIES = (
-    A = (mass=1.0, radius=1.0, color=:tomato,         name="A"),
-    B = (mass=2.5, radius=2.8, color=:mediumseagreen, name="B"), # 1.5 + 0.5 = 2.0
-    C = (mass=3.5, radius=3.4, color=:cornflowerblue, name="C"),
+    A = (mass=1.0, radius=2.0, energy=0, color=:mediumseagreen, name="H2O"),
+    B = (mass=1.0, radius=2.0, energy=0, color=:tomato, name="H3O+"),
+    C = (mass=1.0, radius=2.0, energy=0, color=:cornflowerblue, name="OH-"),
 )
 
 mutable struct Particle
     pos::Vector{Float64}   # [x, y]
     vel::Vector{Float64}   # [vx, vy]
-    species::Int           # 1=A  2=B  3=C
+    species::Int           # 1=H2O  2=H3O+  3=OH-
 end
 
 function Particle(pos, vel, species::Int)

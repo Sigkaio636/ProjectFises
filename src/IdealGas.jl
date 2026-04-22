@@ -15,9 +15,9 @@ include("Types.jl")
 include("Physics.jl")
 include("Visualization.jl")
 
-function init_particles(N_A::Int, N_B::Int, N_C::Int, box::Box; T_init=2.0)
-    N = N_A + N_B + N_C
-    species_list = vcat(fill(1, N_A), fill(2, N_B), fill(3, N_C))
+function init_particles(N_H2O::Int, N_H3O::Int, N_OH::Int, box::Box; T_init=2.0)
+    N = N_H2O + N_H3O + N_OH
+    species_list = vcat(fill(1, N_H2O), fill(2, N_H3O), fill(3, N_OH))
 
     cols = ceil(Int, sqrt(N))
     rows = ceil(Int, N / cols)
@@ -49,9 +49,9 @@ function init_particles(N_A::Int, N_B::Int, N_C::Int, box::Box; T_init=2.0)
 end
 
 function run(;
-    N_A         = 60,
-    N_B         = 5,
-    N_C         = 5,
+    N_H2O         = 60,
+    N_H3O         = 5,
+    N_OH         = 5,
     Lx          = 120.0,
     Ly          = 120.0,
     T_init      = 2.0,
@@ -66,12 +66,12 @@ function run(;
     isdir(out_dir) || mkpath(out_dir)
 
     box       = Box(Lx, Ly)
-    particles = init_particles(N_A, N_B, N_C, box; T_init=T_init)
+    particles = init_particles(N_H2O, N_H3O, N_OH, box; T_init=T_init)
 
     println("="^65)
     println("  Reactive Ideal Gas Simulation — Julia + Plots.jl")
     println("="^65)
-    @printf "  N_A=%d  N_B=%d  N_C=%d  p_react=%.3f\n" N_A N_B N_C p_react
+    @printf "  N_H2O=%d  N_H3O=%d  N_OH=%d  p_react=%.3f\n" N_H2O N_H3O N_OH p_react
     @printf "  box=%.0fx%.0f  T_init=%.2f  dt=%.3f  steps=%d\n\n" Lx Ly T_init dt n_steps
 
     # History
@@ -79,9 +79,9 @@ function run(;
     KE_hist = Float64[]
     T_hist  = Float64[]
     p_hist  = Float64[]
-    NA_hist = Int[]
-    NB_hist = Int[]
-    NC_hist = Int[]
+    N_H2O_hist = Int[]
+    N_H3O_hist = Int[]
+    N_OH_hist = Int[]
 
     anim            = Animation()
     frame_count     = 0
@@ -94,9 +94,9 @@ function run(;
         push!(KE_hist, d.KE)
         push!(T_hist,  d.T)
         push!(p_hist,  sqrt(d.px^2 + d.py^2))
-        push!(NA_hist, d.N_A)
-        push!(NB_hist, d.N_B)
-        push!(NC_hist, d.N_C)
+        push!(N_H2O_hist, d.N_H2O)
+        push!(N_H3O_hist, d.N_H3O)
+        push!(N_OH_hist, d.N_OH)
         if s % save_every == 0
             frame_count += 1
             plt = snapshot(particles, box, s, total_reactions)
@@ -110,7 +110,7 @@ function run(;
 
     record!(0)
     d0 = diagnostics(particles)
-    @printf "  Step %5d | KE=%8.3f | T=%.4f | NA=%d NB=%d NC=%d\n" 0 d0.KE d0.T d0.N_A d0.N_B d0.N_C
+    @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d\n" 0 d0.KE d0.T d0.N_H2O d0.N_H3O d0.N_OH
 
     for s in 1:n_steps
         ne, nr = step!(particles, box, dt, p_react)
@@ -119,7 +119,7 @@ function run(;
         record!(s)
         if s % print_every == 0
             d = diagnostics(particles)
-            @printf "  Step %5d | KE=%8.3f | T=%.4f | NA=%d NB=%d NC=%d | rxn=%d\n" s d.KE d.T d.N_A d.N_B d.N_C total_reactions
+            @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d | rxn=%d\n" s d.KE d.T d.N_H2O d.N_H3O d.N_OH total_reactions
         end
     end
 
@@ -131,7 +131,7 @@ function run(;
     gif(anim, anim_path; fps=20)
     println("  Saved animation  → $anim_path")
 
-    plot_thermodynamics(times, KE_hist, T_hist, p_hist, NA_hist, NB_hist, NC_hist;
+    plot_thermodynamics(times, KE_hist, T_hist, p_hist, N_H2O_hist, N_H3O_hist, N_OH_hist;
         path=joinpath(out_dir, "thermodynamics.png"))
 
     T_eq = mean(T_hist[max(1, end÷2):end])
