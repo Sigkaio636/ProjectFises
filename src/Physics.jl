@@ -70,88 +70,169 @@ function collide!(i::Particle, j::Particle, box::Box)
 end
 
 """
-Attempt the reaction A + A → B + C for two colliding A particles.
+Attempt a stochastic binary chemical reaction between two particles, mutating
+them in-place if the reaction succeeds. Returns `true` if the reaction occurred,
+`false` otherwise.
 
-If the reaction fires (with probability `p_react`):
+The reaction modelled is of the form:
 
-  Both total momentum AND total kinetic energy are conserved exactly.
-  The derivation follows standard reactive-MD practice:
+    Aᵢ + Aⱼ  ──p_react──►  Bᵢ + Bⱼ
 
-  1. Compute the pair's centre-of-mass (CM) velocity:
-       v_cm = (p_i + p_j) / (m_A + m_A)
-     This is invariant — the reaction cannot change it.
+where the input species `(i.species, j.species)` are transmuted into the output
+species `(iout_sp, jout_sp)`. The function enforces **exact conservation** of
+linear momentum and kinetic energy (with a chemical energy correction) at every
+accepted event.
 
-  2. Compute the kinetic energy available in the CM frame:
-       KE_cm = ½ m_A |v_i - v_cm|² + ½ m_A |v_j - v_cm|²
-             = ¼ m_A |v_rel|²
+# Arguments
+- `i::Particle`       : First reactant particle (mutated in-place on success).
+- `j::Particle`       : Second reactant particle (mutated in-place on success).
+- `iout_sp::Int`      : Species index (into `SPECIES`) assigned to `i` after the reaction.
+- `jout_sp::Int`      : Species index (into `SPECIES`) assigned to `j` after the reaction.
+- `p_react::Float64`  : Bare stochastic probability of reaction per collision
+                        attempt, ∈ [0, 1]. Acts as an effective reaction rate
+                        constant at the collision-detection level.
 
-  3. Distribute KE_cm between products B and C via their reduced mass
-       μ_BC = m_B m_C / (m_B + m_C):
-       |v_rel'| = sqrt(2 KE_cm / μ_BC)
-     The direction of v_rel' is chosen uniformly at random (isotropic
-     scattering, no preferred axis after the reaction).
+# Returns
+- `true`  — reaction occurred; `i` and `j` have been mutated.
+- `false` — reaction did not occur (stochastic rejection **or** thermodynamic
+            veto); `i` and `j` are unchanged.
 
-  4. Reconstruct lab-frame velocities:
-       v_B = v_cm + [m_C/(m_B+m_C)] v_rel'
-       v_C = v_cm − [m_B/(m_B+m_C)] v_rel'
+# Physics & Algorithm
 
-  By construction: m_B v_B + m_C v_C = (m_B+m_C) v_cm = (2 m_A) v_cm = p_i + p_j  ✓
-                   ½ m_B |v_B-v_cm|² + ½ m_C |v_C-v_cm|² = KE_cm  ✓
+## 1 — Stochastic gate
+A uniform random number is drawn first. If it exceeds `p_react` the function
+returns immediately with no side-effects, modelling a reaction probability per
+collision.
 
-Returns true if the reaction fired.
+## 2 — Total momentum conservation
+The total linear momentum **P** = mᵢ **vᵢ** + mⱼ **vⱼ** is computed before the
+reaction. Because the total mass may change (Mₒₗd ≠ Mₙₑw), the centre-of-mass
+(CM) velocity is recomputed from the *new* total mass so that **P** is
+preserved exactly:
+
+    vcm_new = P / M_new
+
+## 3 — Energy balance
+Total kinetic energy before the reaction is split into:
+
+    E_init = KE_cm_new + KE_rel + E_react
+
+| Term        | Meaning                                                      |
+|:----------- |:-------------------------------------------------------------|
+| `E_init`    | Total pre-reaction kinetic energy of the two particles       |
+| `KE_cm_new` | KE of the new CM motion (fixed by momentum conservation)     |
+| `E_react`   | Internal chemical energy change  (ΔE = Σeₒᵤₜ − Σeᵢₙ)       |
+| `KE_rel`    | Remaining energy available for relative motion of products   |
+
+`E_react > 0` is endothermic (energy absorbed); `E_react < 0` is exothermic
+(energy released into relative motion).
+
+## 4 — Thermodynamic veto
+If `KE_rel < 0` the reaction is forbidden: the collision does not carry enough
+kinetic energy to supply the endothermic demand (or the mass increase), and the
+function returns `false` without modifying the particles. This is the analogue
+of an activation-energy threshold.
+
+## 5 — Product velocity reconstruction
+The relative speed of the products is obtained from the reduced mass μ = mᵢₒᵤₜ mⱼₒᵤₜ / Mₙₑw:
+
+    v_rel = √(2 KE_rel / μ)
+
+The direction θ is drawn uniformly on [0, 2π), modelling an isotropic
+(hard-sphere-like) collision in 2-D. Velocities are then reconstructed in the
+lab frame:
+
+    vᵢ = vcm_new + (mⱼₒᵤₜ / Mₙₑw) * v_rel_vec
+    vⱼ = vcm_new − (mᵢₒᵤₜ / Mₙₑw) * v_rel_vec
+
+## 6 — Species mutation
+Only after all checks pass are `i.species` and `j.species` updated to
+`iout_sp` and `jout_sp` respectively.
+
+# Conservation laws verified
+| Quantity              | Conserved? | Notes                                      |
+|:----------------------|:----------:|:-------------------------------------------|
+| Linear momentum (x,y) | ✅ exact   | holds even when M_old ≠ M_new              |
+| Kinetic + chemical E  | ✅ exact   | reaction vetoed if budget is insufficient  |
+| Angular momentum      | ❌         | not tracked (point-particle 2-D model)     |
+| Particle count        | ✅         | two in, two out                            |
+
+# Side-effects
+Mutates `i.vel`, `j.vel`, `i.species`, and `j.species` **only** on `return true`.
+The global `SPECIES` table is read but never modified.
+
+# Errors / assumptions
+- `SPECIES` must be accessible in scope and indexed by the integer species codes.
+- Species indices `iout_sp` and `jout_sp` must be valid keys in `SPECIES`.
+- `p_react` is not validated; passing values outside [0,1] produces undefined
+  stochastic behaviour.
+- The function is **not** thread-safe if `i` and `j` can be accessed concurrently.
 """
-function react_AA!(i::Particle, j::Particle, p_react::Float64)
-    # Solo aplica a pares A + A
-    (i.species == 1 && j.species == 1) || return false
+
+function react_chem!(i::Particle, j::Particle, iout_sp::Int, jout_sp::Int, p_react::Float64)
     rand() > p_react && return false
 
-    m_A = SPECIES[1].mass
-    m_B = SPECIES[2].mass
-    m_C = SPECIES[3].mass
+    m_i = SPECIES[i.species].mass
+    m_j = SPECIES[j.species].mass
+    m_iout = SPECIES[iout_sp].mass
+    m_jout = SPECIES[jout_sp].mass
 
-    M_old = 2.0 * m_A
-    M_new = m_B + m_C
+    e_i = SPECIES[i.species].energy
+    e_j = SPECIES[j.species].energy
+    e_iout = SPECIES[iout_sp].energy
+    e_jout = SPECIES[jout_sp].energy
+
+    M_old = m_i + m_j
+    M_new = m_iout + m_jout
 
     # ── 1. Conservación estricta del Momento Total ─────────────────────────
     # Calculamos el momento absoluto previo a la reacción
-    P_x = m_A * i.vel[1] + m_A * j.vel[1]
-    P_y = m_A * i.vel[2] + m_A * j.vel[2]
+    P_x = m_i * i.vel[1] + m_j * j.vel[1]
+    P_y = m_i * i.vel[2] + m_j * j.vel[2]
 
     # La nueva velocidad del CM debe ajustarse si la masa cambió
     vcm_x_new = P_x / M_new
     vcm_y_new = P_y / M_new
 
-    # ── 2. Conservación estricta de la Energía Cinética ────────────────────
-    KE_total = 0.5 * m_A * (i.vel[1]^2 + i.vel[2]^2) + 
-               0.5 * m_A * (j.vel[1]^2 + j.vel[2]^2)
+    # ── 2. Conservación estricta de la Energía ────────────────────
+    # Al principio es solo energía cinética de las particulas incidentes
+    E_init = 0.5 * m_i * (i.vel[1]^2 + i.vel[2]^2) + 
+               0.5 * m_j * (j.vel[1]^2 + j.vel[2]^2)
 
     # Energía que "consume" el desplazamiento del nuevo centro de masas
     KE_cm_new = 0.5 * M_new * (vcm_x_new^2 + vcm_y_new^2)
+
+    # Energía de reacción entre las particulas
+    E_react  = e_iout + e_jout - e_i - e_j
+
+    # Balance de energía: E_init = KE_rel + KE_cm_new + E_react
     
     # Energía restante disponible para la repulsión de los productos
-    KE_rel = KE_total - KE_cm_new
+    KE_rel = E_init - KE_cm_new - E_react
 
-    # Guardia termodinámica: si la masa aumenta tanto que requiere más energía 
-    # de la que existe, la reacción es "muy endotérmica" y no puede ocurrir.
+    # Guardia termodinámica: si la reacción es "muy endotérmica" 
+    #   (porque masa aumenta tanto que requiere más energía de la que existe,
+    #    o porque la reacción química posee una gran energía de activación)
+    #   y no puede ocurrir.
     KE_rel < 0.0 && return false
 
     # ── 3. Reconstruir velocidades de los productos B y C ──────────────────
-    mu_BC   = m_B * m_C / M_new
+    mu_BC   = m_iout * m_jout / M_new
     vrel_cm = sqrt(2.0 * KE_rel / mu_BC)
 
     theta = 2π * rand()
     rx = vrel_cm * cos(theta)
     ry = vrel_cm * sin(theta)
 
-    fB = m_C / M_new
-    fC = m_B / M_new
+    fiout = m_jout / M_new
+    fjout = m_iout / M_new
 
-    i.vel[1] = vcm_x_new + fB * rx;  i.vel[2] = vcm_y_new + fB * ry
-    j.vel[1] = vcm_x_new - fC * rx;  j.vel[2] = vcm_y_new - fC * ry
+    i.vel[1] = vcm_x_new + fiout * rx;  i.vel[2] = vcm_y_new + fiout * ry
+    j.vel[1] = vcm_x_new - fjout * rx;  j.vel[2] = vcm_y_new - fjout * ry
 
     # ── 4. Cambiar especies ────────────────────────────────────────────────
-    i.species = 2   # becomes B
-    j.species = 3   # becomes C
+    i.species = iout_sp
+    j.species = jout_sp
 
     return true
 end
@@ -228,11 +309,11 @@ One simulation step:
   2. Advance positions with velocity-Verlet (no forces, so just free streaming).
   3. Apply periodic boundary conditions.
 
-Returns (n_elastic, n_reactions).
+Returns (n_collitions, n_reactions).
 """
 function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Float64)
     n          = length(particles)
-    n_elastic  = 0
+    n_collitions  = 0
     n_reactions = 0
 
     for ii in 1:n-1, jj in ii+1:n
@@ -246,9 +327,9 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
         d2 > sigma^2 && continue
         d2 < 1e-14   && continue
 
-        # A+A pair: try reaction before elastic bounce
+        # H2O+H2O pair: try reaction before elastic bounce
         if pi.species == 1 && pj.species == 1
-            if react_AA!(pi, pj, p_react)
+            if react_chem!(pi, pj, 2, 3, p_react)
                 n_reactions += 1
                 # No positional correction — see collide! docstring.
                 continue
@@ -257,7 +338,7 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
 
         # Standard elastic collision
         if collide!(pi, pj, box)
-            n_elastic += 1
+            n_collitions += 1
         end
     end
 
@@ -268,7 +349,7 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
         wrap!(p, box)
     end
 
-    return n_elastic, n_reactions
+    return n_collitions, n_reactions
 end
 
 function diagnostics(particles::Vector{Particle})
@@ -276,8 +357,8 @@ function diagnostics(particles::Vector{Particle})
     px   = sum(mass(p) * p.vel[1] for p in particles)
     py   = sum(mass(p) * p.vel[2] for p in particles)
     T    = KE / length(particles)
-    N_A  = count(p -> p.species == 1, particles)
-    N_B  = count(p -> p.species == 2, particles)
-    N_C  = count(p -> p.species == 3, particles)
-    return (; KE, px, py, T, N_A, N_B, N_C)
+    N_H2O  = count(p -> p.species == 1, particles)
+    N_H3O  = count(p -> p.species == 2, particles)
+    N_OH  = count(p -> p.species == 3, particles)
+    return (; KE, px, py, T, N_H2O, N_H3O, N_OH)
 end

@@ -4,9 +4,9 @@
 
 function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_reactions::Int)
     sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
-    sp_labels = ["A (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius))",
-                 "B (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius))",
-                 "C (m=$(SPECIES[3].mass), r=$(SPECIES[3].radius))"]
+    sp_labels = ["H2O (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius), e=$(SPECIES[1].energy))",
+                 "H3O+ (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius), e=$(SPECIES[2].energy))",
+                 "OH- (m=$(SPECIES[3].mass), r=$(SPECIES[3].radius), e=$(SPECIES[3].energy))"]
 
     plt = plot(
         xlims        = (0, box.width),
@@ -15,14 +15,14 @@ function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_re
         legend       = :topright,
         grid         = false,
         framestyle   = :box,
-        background_color_inside = :black,
-        background_color        = :black,
-        foreground_color        = :white,
+        background_color_inside = :white, # = :black,
+        background_color        = :white, # = :black,
+        foreground_color        = :black, # = :white,
         title          = @sprintf("step %d  |  reactions: %d", step_idx, total_reactions),
-        titlefontcolor = :white,
+        titlefontcolor = :black, # = :white,
         titlefontsize  = 9,
-        tickfontcolor  = :white,
-        legendfontcolor = :white,
+        tickfontcolor  = :black, # = :white,
+        legendfontcolor = :black, # = :white,
         legendbackground_color = RGBA(0,0,0,0.5),
         size           = (580, 580),
     )
