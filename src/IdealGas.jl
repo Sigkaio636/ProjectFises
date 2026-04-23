@@ -99,11 +99,16 @@ function run(;
     N_H2O_hist = Int[]
     N_H3O_hist = Int[]
     N_OH_hist = Int[]
+    KE_H2O_hist = Float64[]
+    KE_H3O_hist = Float64[]
+    KE_OH_hist = Float64[]
+    Kc_hist = Float64[]
 
     anim            = Animation()
     frame_count     = 0
     total_elastic   = 0
-    total_reactions = 0
+    total_react_direct = 0
+    total_react_reverse = 0
 
     function record!(s)
         d = diagnostics(particles)
@@ -114,9 +119,14 @@ function run(;
         push!(N_H2O_hist, d.N_H2O)
         push!(N_H3O_hist, d.N_H3O)
         push!(N_OH_hist, d.N_OH)
+        push!(KE_H2O_hist, d.KE_H2O)
+        push!(KE_H3O_hist, d.KE_H3O)
+        push!(KE_OH_hist, d.KE_OH)
+        push!(Kc_hist, d.Kc)
+
         if s % save_every == 0
             frame_count += 1
-            plt = snapshot(particles, box, s, total_reactions)
+            plt = snapshot(particles, box, s, total_react_direct, total_react_reverse)
             frame(anim, plt)
             if save_frames
                 p2 = joinpath(out_dir, @sprintf("snapshot_%04d.png", s))
@@ -130,30 +140,35 @@ function run(;
     @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d\n" 0 d0.KE d0.T d0.N_H2O d0.N_H3O d0.N_OH
 
     for s in 1:n_steps
-        ne, nr = step!(particles, box, dt, p_react)
+        ne, nrd, nrr = step!(particles, box, dt, p_react)
         total_elastic   += ne
-        total_reactions += nr
+        total_react_direct += nrd
+        total_react_reverse += nrr
         record!(s)
         if s % print_every == 0
             d = diagnostics(particles)
-            @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d | rxn=%d\n" s d.KE d.T d.N_H2O d.N_H3O d.N_OH total_reactions
+            @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d | col=%d | rxn_dir=%d  rxn_rev=%d\n" s d.KE d.T d.N_H2O d.N_H3O d.N_OH total_elastic total_react_direct total_react_reverse
         end
     end
 
     println("\n  Total elastic collisions : $total_elastic")
-    println("  Total reactions (A+A→B+C): $total_reactions")
+    println("  Total direct reactions (2 H2O → H3O + OH): $total_react_direct")
+    println("  Total reverse reactions (H3O + OH → 2 H2O): $total_react_reverse")
     println("  Frames captured          : $frame_count")
 
     anim_path = joinpath(out_dir, "animation.gif")
     gif(anim, anim_path; fps=20)
     println("  Saved animation  → $anim_path")
 
-    plot_thermodynamics(times, KE_hist, T_hist, p_hist, N_H2O_hist, N_H3O_hist, N_OH_hist;
+    plot_thermodynamics(times, KE_hist, T_hist, p_hist;
         path=joinpath(out_dir, "thermodynamics.png"))
 
     T_eq = mean(T_hist[max(1, end÷2):end])
     plot_speed_distribution(particles; T_eq=T_eq,
         path=joinpath(out_dir, "speed_dist.png"))
+
+    plot_population_equilibrium(times, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
+        path=joinpath(out_dir, "population.png"))
 
     println("\n  All outputs in: $(abspath(out_dir))/")
     println("="^65)

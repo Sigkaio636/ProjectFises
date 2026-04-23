@@ -2,7 +2,7 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
-function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_reactions::Int)
+function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_react_direct::Int, total_react_reverse::Int)
     sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
     sp_labels = ["H2O (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius), e=$(SPECIES[1].energy))",
                  "H3O+ (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius), e=$(SPECIES[2].energy))",
@@ -18,7 +18,7 @@ function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_re
         background_color_inside = :white, # = :black,
         background_color        = :white, # = :black,
         foreground_color        = :black, # = :white,
-        title          = @sprintf("step %d  |  reactions: %d", step_idx, total_reactions),
+        title          = @sprintf("step %d  |  rxn dir: %d  |  rxn rev: %d", step_idx, total_react_direct, total_react_reverse),
         titlefontcolor = :black, # = :white,
         titlefontsize  = 9,
         tickfontcolor  = :black, # = :white,
@@ -63,9 +63,9 @@ function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_re
     return plt
 end
 
-function plot_thermodynamics(times, KE_hist, T_hist, p_hist, NA_hist, NB_hist, NC_hist;
+function plot_thermodynamics(times, KE_hist, T_hist, p_hist;
                               path="thermodynamics.png")
-    plt = plot(layout=(4,1), size=(750, 680),
+    plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
         left_margin  = 8Plots.mm,
         bottom_margin = 4Plots.mm)
@@ -84,11 +84,6 @@ function plot_thermodynamics(times, KE_hist, T_hist, p_hist, NA_hist, NB_hist, N
     plot!(plt[3], times, p_hist;
         lc=:mediumseagreen, lw=1.2, legend=false,
         ylabel="|p| total", label="|p|")
-
-    plot!(plt[4], times, NA_hist; lc=:tomato,          lw=1.5, label="N_A",
-        ylabel="Population", xlabel="Time", legend=:topright)
-    plot!(plt[4], times, NB_hist; lc=:mediumseagreen,  lw=1.5, label="N_B")
-    plot!(plt[4], times, NC_hist; lc=:cornflowerblue,  lw=1.5, label="N_C")
 
     savefig(plt, path)
     println("  Saved thermo     → $path")
@@ -131,5 +126,27 @@ function plot_speed_distribution(particles::Vector{Particle}; T_eq=1.0, path="sp
     return plt
 end
 
-function plot_population_equilibrium(particles::Vector{Particle}; T_eq=1.0, path="population.png")
+function plot_population_equilibrium(times, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc;
+     path="population.png")
+    plt = plot(layout=(3,1), size=(750, 680),
+        background_color = :white,
+        left_margin  = 8Plots.mm,
+        bottom_margin = 4Plots.mm)
+
+    plot!(plt[1], times, N_H2O_hist; lc=:mediumseagreen,          lw=1.5, label="N_H2O",
+        ylabel="Population", xlabel="Time", legend=:topright)
+    plot!(plt[1], times, N_H3O_hist; lc=:tomato,  lw=1.5, label="N_H3O")
+    plot!(plt[1], times, N_OH_hist; lc=:cornflowerblue,  lw=1.5, label="N_OH")
+
+    plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen,          lw=1.5, label="KE_H2O",
+        ylabel="KE per species", xlabel="Time", legend=:topright)
+    plot!(plt[2], times, KE_H3O_hist; lc=:tomato,  lw=1.5, label="KE_H3O")
+    plot!(plt[2], times, KE_OH_hist; lc=:cornflowerblue,  lw=1.5, label="KE_OH")
+
+    plot!(plt[3], times, Kc; lc=:mediumseagreen,          lw=1.5, label="Kc",
+        ylabel="[H3O+][OH-]/[H2O]^2", xlabel="Time", legend=:topright)
+
+    savefig(plt, path)
+    println("  Saved population     → $path")
+    return plt
 end
