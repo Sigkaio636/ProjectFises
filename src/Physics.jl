@@ -250,24 +250,33 @@ Returns (n_collitions, n_reactions).
 function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Float64)
     n = length(particles)
 
-    # --- Stage 1: detect all events (read-only on particles) ---
-    events = Event[]
+    # --- Stage 1: parallel detection ---
+    # Each thread writes to its own local buffer → no race condition on push!
+    local_events = [Event[] for _ in 1:nthreads()+1]
 
-    for ii in 1:n-1, jj in ii+1:n
-        pi, pj = particles[ii], particles[jj]
-        dx, dy = min_image_delta(pj, pi, box)
-        d2 = dx^2 + dy^2
-        sigma = radius(pi) + radius(pj)
-        (d2 > sigma^2 || d2 < 1e-14) && continue
+    @threads for ii in 1:n-1
+        tid = threadid()
+        pi  = particles[ii]
+        for jj in ii+1:n
+            pj = particles[jj]
+            dx, dy = min_image_delta(pj, pi, box)
+            d2 = dx^2 + dy^2
+            sigma = radius(pi) + radius(pj)
+            (d2 > sigma^2 || d2 < 1e-14) && continue
 
-        if pi.species == 1 && pj.species == 1
-            push!(events, Event(ii, jj, :react_forward))
-        elseif (pi.species==2 && pj.species==3) || (pi.species==3 && pj.species==2)
-            push!(events, Event(ii, jj, :react_reverse))
-        else
-            push!(events, Event(ii, jj, :elastic))
+            kind = if pi.species == 1 && pj.species == 1
+                :react_forward
+            elseif (pi.species==2 && pj.species==3) || (pi.species==3 && pj.species==2)
+                :react_reverse
+            else
+                :elastic
+            end
+            push!(local_events[tid], Event(ii, jj, kind))
         end
     end
+
+    # Merge thread-local buffers into one list
+    events = reduce(vcat, local_events)
 
     # --- Stage 2: apply events (mutations happen here, sequentially) ---
     # Each particle can only participate in ONE event per step
@@ -300,7 +309,7 @@ function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Floa
     end
 
     # --- Stage 3: free streaming ---
-    for p in particles
+    @threads for p in particles
         p.pos[1] += p.vel[1] * dt
         p.pos[2] += p.vel[2] * dt
         wrap!(p, box)

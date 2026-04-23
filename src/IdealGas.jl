@@ -8,6 +8,7 @@ using LinearAlgebra
 using Statistics
 using Printf
 using Plots
+using Base.Threads: @threads, nthreads, threadid
 gr()
 
 # --- Inclusión de archivos internos ---
