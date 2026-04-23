@@ -182,6 +182,8 @@ function step!(particles::Vector{Particle}, box::Box,
             nrow = mod(row + drow, cl.nrows)
             ncol = mod(col + dcol, cl.ncols)
             nci  = nrow * cl.ncols + ncol + 1
+
+            (ci > nci) && continue
             
             for ii in cl.cells[ci]
                 pi = particles[ii]
@@ -191,7 +193,7 @@ function step!(particles::Vector{Particle}, box::Box,
                 
                 for jj in cl.cells[nci]
                     # Avoid double-counting and self-interaction
-                    ii >= jj && continue
+                    (ci == nci && ii >= jj) && continue
                     
                     pj = particles[jj]
                     dx, dy = min_image_delta(xi, yi, pj.x, pj.y, box)
@@ -218,6 +220,7 @@ function step!(particles::Vector{Particle}, box::Box,
     total_events = sum(length(_thread_bufs[k]) for k in 1:nt+1)
     events = Vector{Event}(undef, 0)
     sizehint!(events, total_events)
+    shuffle!(events)
     for k in 1:nt+1
         append!(events, _thread_bufs[k])
     end
@@ -235,20 +238,21 @@ function step!(particles::Vector{Particle}, box::Box,
         pi = particles[ii]
         pj = particles[jj]
 
-        if ev.kind == EV_FORWARD
+        if ev.kind == EV_REVERSE
+            if react_chem!(pi, pj, 1, 1, p_react)
+                reacted[ii] = reacted[jj] = true
+                n_react_rev += 1
+            else
+                collide!(pi, pj, box) && (n_elastic += 1)
+            end    
+        elseif ev.kind == EV_FORWARD
             if react_chem!(pi, pj, 2, 3, p_react)
                 reacted[ii] = reacted[jj] = true
                 n_react_fwd += 1
             else
                 collide!(pi, pj, box) && (n_elastic += 1)
             end
-        elseif ev.kind == EV_REVERSE
-            if react_chem!(pi, pj, 1, 1, p_react)
-                reacted[ii] = reacted[jj] = true
-                n_react_rev += 1
-            else
-                collide!(pi, pj, box) && (n_elastic += 1)
-            end
+        
         else
             collide!(pi, pj, box) && (n_elastic += 1)
         end
