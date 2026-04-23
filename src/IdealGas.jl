@@ -160,6 +160,9 @@ function run(;
     plot_population_equilibrium(times, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
         path=joinpath(out_dir, "population.png"))
 
+    plot_kc_line(T_hist, Kc_hist;
+        path=joinpath(out_dir, "kc_line.png"))
+
     println("\n  All outputs in: $(abspath(out_dir))/")
     println("="^65)
     return particles, box

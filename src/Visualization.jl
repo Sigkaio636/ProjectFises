@@ -2,6 +2,8 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
+BURNOUT = 300
+
 function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int,
                   total_react_direct::Int, total_react_reverse::Int)
     
@@ -105,11 +107,17 @@ function plot_thermodynamics(times, KE_hist, T_hist, p_hist;
     plot!(plt[1], times, KE_hist;
         lc=:steelblue, lw=1.5, label="KE", ylabel="Total KE",
         title="Thermodynamic observables — reactive ideal gas")
-    hline!(plt[1], [mean(KE_hist)]; lc=:red, ls=:dash, lw=1, label="⟨KE⟩")
+    mean_KE = mean(KE_hist[BURNOUT:end])
+    std_KE = std(KE_hist[BURNOUT:end])
+    hline!(plt[1], [mean_KE]; lc=:red, ls=:dash, lw=1, label=@sprintf("⟨KE⟩ = %.2f ± %.2f", mean_KE, std_KE))
+    vline!(plt[1], [BURNOUT]; lc=:gray16, ls=:dot, lw=1, label="Burnout end")
 
     plot!(plt[2], times, T_hist;
         lc=:darkorange, lw=1.5, label="T", ylabel="Temperature")
-    hline!(plt[2], [mean(T_hist)]; lc=:red, ls=:dash, lw=1, label="⟨T⟩")
+    mean_T = mean(T_hist[BURNOUT:end])
+    std_T = std(T_hist[BURNOUT:end])
+    hline!(plt[2], [mean_T]; lc=:red, ls=:dash, lw=1, label=@sprintf("⟨T⟩ = %.2f ± %.2f", mean_T, std_T))
+    vline!(plt[2], [BURNOUT]; lc=:gray16, ls=:dot, lw=1, label="Burnout end")
 
     plot!(plt[3], times, p_hist;
         lc=:mediumseagreen, lw=1.2, ylabel="|p| total", label="|p|")
@@ -166,20 +174,44 @@ function plot_population_equilibrium(times,
         left_margin      = 8Plots.mm,
         bottom_margin    = 4Plots.mm)
 
-    plot!(plt[1], times, N_H2O_hist; lc=:mediumseagreen, lw=1.5, label="N_H₂O",
+    mean_H2O = mean(N_H2O_hist[BURNOUT:end]); std_H2O = std(N_H2O_hist[BURNOUT:end])
+    plot!(plt[1], times, N_H2O_hist; lc=:mediumseagreen, lw=1.5, label=@sprintf("N_H₂O = %.2f ± %.2f", mean_H2O, std_H2O),
         ylabel="Population", xlabel="Time", legend=:topright)
-    plot!(plt[1], times, N_H3O_hist; lc=:tomato,         lw=1.5, label="N_H₃O⁺")
-    plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label="N_OH⁻")
+    mean_H3O = mean(N_H3O_hist[BURNOUT:end]); std_H3O = std(N_H3O_hist[BURNOUT:end])
+    plot!(plt[1], times, N_H3O_hist; lc=:tomato,         lw=1.5, label=@sprintf("N_H₃O⁺ = %.2f ± %.2f", mean_H3O, std_H3O))
+    mean_OH = mean(N_OH_hist[BURNOUT:end]); std_OH = std(N_OH_hist[BURNOUT:end])
+    plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label=@sprintf("N_OH⁻ = %.2f ± %.2f", mean_H3O, std_H3O))
+    vline!(plt[1], [BURNOUT]; lc=:gray16, ls=:dot, lw=1, label="Burnout end")
 
     plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O",
         ylabel="KE per species", xlabel="Time", legend=:topright)
     plot!(plt[2], times, KE_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺")
     plot!(plt[2], times, KE_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻")
 
-    plot!(plt[3], times, Kc_hist; lc=:mediumseagreen, lw=1.5, label="Kc",
+    plot!(plt[3], times, Kc_hist; lc=:darkgoldenrod1, lw=1.5, label="Kc",
         ylabel="[H₃O⁺][OH⁻]/[H₂O]²", xlabel="Time", legend=:topright)
 
     savefig(plt, path)
+    println("  Saved population → $path")
+    return plt
+end
+
+function plot_kc_line(T_hist, Kc_hist;
+                              path="kc_line.png")
+    plt = plot(layout=(1,1), size=(750, 680),
+        background_color = :white,
+        left_margin      = 8Plots.mm,
+        bottom_margin    = 4Plots.mm)
+
+    lnKc  = log.(Kc_hist)
+    inv_T = 1.0 ./ T_hist
+
+    plot!(plt[1], inv_T[BURNOUT:end], lnKc[BURNOUT:end];
+        lc=:steelblue, lw=1.5, xlabel="beta", ylabel="lnKc", marker='o', markersize=2,
+        title="ln Kc = -Deps beta")
+
+    savefig(plt, path)
+
     println("  Saved population → $path")
     return plt
 end
