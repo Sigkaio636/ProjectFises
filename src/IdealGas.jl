@@ -34,34 +34,23 @@ function init_particles(N_H2O::Int, N_H3O::Int, N_OH::Int, box::Box; T_init=2.0)
         col = (k-1) % cols
         row = (k-1) ÷ cols
         push!(particles, Particle(
-            [(col + 0.5)*dx, (row + 0.5)*dy],
-            [sv * cos(th_s),   sv * sin(th_s)],
-            sp))
+            (col + 0.5)*dx,          # x
+            (row + 0.5)*dy,          # y
+            sv * cos(th_s),          # vx
+            sv * sin(th_s),          # vy
+            Int32(sp)))
     end
     
 
-    # Zero total momentum
+    # Zero momentum — update field access:
     total_m  = sum(mass(p) for p in particles)
-    mean_px  = sum(mass(p) * p.vel[1] for p in particles) / total_m
-    mean_py  = sum(mass(p) * p.vel[2] for p in particles) / total_m
-    
-    # KE before drift removal
-    KE_before = sum(0.5 * mass(p) * (p.vel[1]^2 + p.vel[2]^2) for p in particles)
-
-    for p in particles
-        p.vel[1] -= mean_px
-        p.vel[2] -= mean_py
-    end
-
-    # KE after drift removal (will be slightly less)
-    KE_after = sum(0.5 * mass(p) * (p.vel[1]^2 + p.vel[2]^2) for p in particles)
-
-    # Rescale to restore exact KE
+    mean_px  = sum(mass(p) * p.vx for p in particles) / total_m
+    mean_py  = sum(mass(p) * p.vy for p in particles) / total_m
+    KE_before = sum(0.5 * mass(p) * (p.vx^2 + p.vy^2) for p in particles)
+    for p in particles;  p.vx -= mean_px;  p.vy -= mean_py;  end
+    KE_after  = sum(0.5 * mass(p) * (p.vx^2 + p.vy^2) for p in particles)
     scale = sqrt(KE_before / KE_after)
-    for p in particles
-        p.vel[1] *= scale
-        p.vel[2] *= scale
-    end
+    for p in particles;  p.vx *= scale;  p.vy *= scale;  end
 
     return particles
 end
