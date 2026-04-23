@@ -248,44 +248,65 @@ One simulation step:
 Returns (n_collitions, n_reactions).
 """
 function step!(particles::Vector{Particle}, box::Box, dt::Float64, p_react::Float64)
-    n          = length(particles)
-    n_collitions  = 0
-    n_reactions = 0
+    n = length(particles)
+
+    # --- Stage 1: detect all events (read-only on particles) ---
+    events = Event[]
 
     for ii in 1:n-1, jj in ii+1:n
-        pi = particles[ii]
-        pj = particles[jj]
-
-        # Check geometric overlap first (cheap)
+        pi, pj = particles[ii], particles[jj]
         dx, dy = min_image_delta(pj, pi, box)
-        d2 = dx*dx + dy*dy
+        d2 = dx^2 + dy^2
         sigma = radius(pi) + radius(pj)
-        d2 > sigma^2 && continue
-        d2 < 1e-14   && continue
+        (d2 > sigma^2 || d2 < 1e-14) && continue
 
-        # H2O+H2O pair: try reaction before elastic bounce
         if pi.species == 1 && pj.species == 1
-            if react_chem!(pi, pj, 2, 3, p_react)
-                n_reactions += 1
-                # No positional correction — see collide! docstring.
-                continue
-            end
-        end
-
-        # Standard elastic collision
-        if collide!(pi, pj, box)
-            n_collitions += 1
+            push!(events, Event(ii, jj, :react_forward))
+        elseif (pi.species==2 && pj.species==3) || (pi.species==3 && pj.species==2)
+            push!(events, Event(ii, jj, :react_reverse))
+        else
+            push!(events, Event(ii, jj, :elastic))
         end
     end
 
-    # Free streaming
+    # --- Stage 2: apply events (mutations happen here, sequentially) ---
+    # Each particle can only participate in ONE event per step
+    reacted = falses(n)
+    n_collisions = 0
+    n_react_direct  = 0
+    n_react_reverse  = 0
+
+    for ev in events
+        reacted[ev.ii] || reacted[ev.jj] || begin   # skip if already reacted
+            pi, pj = particles[ev.ii], particles[ev.jj]
+            if ev.kind == :react_forward
+                if react_chem!(pi, pj, 2, 3, p_react)
+                    reacted[ev.ii] = reacted[ev.jj] = true
+                    n_react_direct += 1
+                else
+                    collide!(pi, pj, box) && (n_collisions += 1)
+                end
+            elseif ev.kind == :react_reverse
+                if react_chem!(pi, pj, 1, 1, p_react)
+                    reacted[ev.ii] = reacted[ev.jj] = true
+                    n_react_reverse += 1
+                else
+                    collide!(pi, pj, box) && (n_collisions += 1)
+                end
+            else
+                collide!(pi, pj, box) && (n_collisions += 1)
+            end
+        end
+    end
+
+    # --- Stage 3: free streaming ---
     for p in particles
         p.pos[1] += p.vel[1] * dt
         p.pos[2] += p.vel[2] * dt
         wrap!(p, box)
     end
 
-    return n_collitions, n_reactions
+    return n_collisions, n_react_direct, n_react_reverse
 end
 
 function diagnostics(particles::Vector{Particle})
@@ -296,5 +317,10 @@ function diagnostics(particles::Vector{Particle})
     N_H2O  = count(p -> p.species == 1, particles)
     N_H3O  = count(p -> p.species == 2, particles)
     N_OH  = count(p -> p.species == 3, particles)
-    return (; KE, px, py, T, N_H2O, N_H3O, N_OH)
+    KE_H2O = sum(kinetic_energy(p) for p in particles if p.species ==1)
+    KE_H3O = sum(kinetic_energy(p) for p in particles if p.species ==2)
+    KE_OH = sum(kinetic_energy(p) for p in particles if p.species ==3)
+    Kc = N_H3O*N_OH/N_H2O^2
+
+    return (; KE, px, py, T, N_H2O, N_H3O, N_OH, KE_H2O, KE_H3O, KE_OH, Kc)
 end

@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────
 
 const SPECIES = (
-    A = (mass=1.0, radius=2.0, energy=5, color=:mediumseagreen, name="H2O"),
+    A = (mass=1.0, radius=2.0, energy=2, color=:mediumseagreen, name="H2O"),
     B = (mass=1.0, radius=2.0, energy=0, color=:tomato, name="H3O+"),
     C = (mass=1.0, radius=2.0, energy=0, color=:cornflowerblue, name="OH-"),
 )
@@ -22,4 +22,9 @@ end
 struct Box
     width::Float64
     height::Float64
+end
+
+struct Event
+    ii::Int; jj::Int
+    kind::Symbol          # :react_forward, :react_reverse, :elastic
 end
