@@ -12,7 +12,7 @@ struct SpeciesData
 end
 
 const SPECIES = (
-    SpeciesData(1.0, 2.0, 2.0, :mediumseagreen,   "H₂O" ),   # 1
+    SpeciesData(1.0, 2.0, 10.0, :mediumseagreen,   "H₂O" ),   # 1
     SpeciesData(1.0, 2.0, 0.0, :tomato,            "H₃O⁺"),   # 2
     SpeciesData(1.0, 2.0, 0.0, :cornflowerblue,    "OH⁻" ),   # 3
 )

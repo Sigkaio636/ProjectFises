@@ -21,6 +21,21 @@ end
     return dx, dy
 end
 
+"""
+Two-phase hard-sphere collision resolver.
+
+Phase 1 — positional correction:
+  Move i and j apart along the line of centres until they just touch
+  (overlap → 0).  Split in proportion to mass so the CM is conserved.
+  This prevents the "sticky particle" bug where repeated impulses on the
+  same overlapping pair accelerate them inward instead of outward.
+
+Phase 2 — velocity impulse:
+  Standard elastic collision formula in the CM frame, giving:
+    Δv_i = −[2·m_j/(m_i+m_j)] (v_rel · n̂) n̂
+    Δv_j = +[2·m_i/(m_i+m_j)] (v_rel · n̂) n̂
+  Both total momentum and total kinetic energy are conserved exactly.
+"""
 function collide!(i::Particle, j::Particle, box::Box)
     dx, dy = min_image_delta(j.x, j.y, i.x, i.y, box)
     d2     = dx*dx + dy*dy
@@ -62,17 +77,29 @@ function react_chem!(i::Particle, j::Particle,
     e_iout = SPECIES[iout_sp].energy;   e_jout = SPECIES[jout_sp].energy
 
     M_new   = m_iout + m_jout
-    P_x     = m_i*i.vx + m_j*j.vx
-    P_y     = m_i*i.vy + m_j*j.vy
-    vcm_x   = P_x / M_new
-    vcm_y   = P_y / M_new
+    # ── 1. Conservación estricta del Momento Total ─────────────────────────
+    # Calculamos el momento absoluto previo a la reacción
+    P_x     = m_i*i.vx + m_j*j.vx;  P_y     = m_i*i.vy + m_j*j.vy
+    # La nueva velocidad del CM debe ajustarse si la masa cambió
+    vcm_x   = P_x / M_new;  vcm_y   = P_y / M_new
 
+    # ── 2. Conservación estricta de la Energía ────────────────────
+    # Al principio es solo energía cinética de las particulas incidentes
     E_init  = 0.5*m_i*(i.vx^2 + i.vy^2) + 0.5*m_j*(j.vx^2 + j.vy^2)
+    # Energía que "consume" el desplazamiento del nuevo centro de masas
     KE_cm   = 0.5*M_new*(vcm_x^2 + vcm_y^2)
+    # Energía de reacción entre las particulas
     E_react = e_iout + e_jout - e_i - e_j
+    # Balance de energía: E_init = KE_rel + KE_cm_new + E_react
+    # Energía restante disponible para la repulsión de los productos
     KE_rel  = E_init - KE_cm - E_react
+    # Guardia termodinámica: si la reacción es "muy endotérmica" 
+    #   (porque masa aumenta tanto que requiere más energía de la que existe,
+    #    o porque la reacción química posee una gran energía de activación)
+    #   y no puede ocurrir.
     KE_rel < 0.0 && return false
 
+    # ── 3. Reconstruir velocidades de los productos ──────────────────
     mu      = m_iout * m_jout / M_new
     vrel    = sqrt(2.0 * KE_rel / mu)
     theta   = 2π * rand()
