@@ -28,7 +28,7 @@ function init_particles(N_H2O::Int, N_H3O::Int, N_OH::Int, box::Box; T_init=2.0)
     for k in 1:N
         sp  = species_list[k]
         m   = SPECIES[sp].mass
-        sv  = sqrt(3*T_init / m)
+        sv  = sqrt(2*T_init / m)
         th_s = rand()*2*pi
         col = (k-1) % cols
         row = (k-1) ÷ cols
@@ -51,7 +51,7 @@ function init_particles(N_H2O::Int, N_H3O::Int, N_OH::Int, box::Box; T_init=2.0)
         p.vel[1] -= mean_px
         p.vel[2] -= mean_py
     end
-    
+
     # KE after drift removal (will be slightly less)
     KE_after = sum(0.5 * mass(p) * (p.vel[1]^2 + p.vel[2]^2) for p in particles)
 
