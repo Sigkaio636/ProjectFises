@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────
 
 const SPECIES = (
-    A = (mass=1.0, radius=2.0, energy=0, color=:mediumseagreen, name="H2O"),
+    A = (mass=1.0, radius=2.0, energy=5, color=:mediumseagreen, name="H2O"),
     B = (mass=1.0, radius=2.0, energy=0, color=:tomato, name="H3O+"),
     C = (mass=1.0, radius=2.0, energy=0, color=:cornflowerblue, name="OH-"),
 )

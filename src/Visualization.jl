@@ -130,3 +130,6 @@ function plot_speed_distribution(particles::Vector{Particle}; T_eq=1.0, path="sp
     println("  Saved speed dist → $path")
     return plt
 end
+
+function plot_population_equilibrium(particles::Vector{Particle}; T_eq=1.0, path="population.png")
+end
