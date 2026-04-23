@@ -2,62 +2,94 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
-function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int, total_react_direct::Int, total_react_reverse::Int)
-    sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
-    sp_labels = ["H2O (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius), e=$(SPECIES[1].energy))",
-                 "H3O+ (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius), e=$(SPECIES[2].energy))",
-                 "OH- (m=$(SPECIES[3].mass), r=$(SPECIES[3].radius), e=$(SPECIES[3].energy))"]
+function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int,
+                  total_react_direct::Int, total_react_reverse::Int)
+    
+    n = length(particles)
 
-    plt = plot(
-        xlims        = (0, box.width),
-        ylims        = (0, box.height),
-        aspect_ratio = :equal,
-        legend       = :topright,
-        grid         = false,
-        framestyle   = :box,
-        background_color_inside = :white, # = :black,
-        background_color        = :white, # = :black,
-        foreground_color        = :black, # = :white,
-        title          = @sprintf("step %d  |  rxn dir: %d  |  rxn rev: %d", step_idx, total_react_direct, total_react_reverse),
-        titlefontcolor = :black, # = :white,
-        titlefontsize  = 9,
-        tickfontcolor  = :black, # = :white,
-        legendfontcolor = :black, # = :white,
-        legendbackground_color = RGBA(0,0,0,0.5),
-        size           = (580, 580),
-    )
+    # Pre-allocate coordinate arrays for the 3 species
+    xs = [Float64[] for _ in 1:3]
+    ys = [Float64[] for _ in 1:3]
+    
+    # Pre-allocate NaN-separated arrays for velocity arrows
+    vx_lines = [Float64[] for _ in 1:3]
+    vy_lines = [Float64[] for _ in 1:3]
 
-    # One invisible scatter per species for the legend
-    for (sp, col, lbl) in zip(1:3, sp_colors, sp_labels)
-        scatter!(plt, Float64[], Float64[];
-            markercolor=col, markerstrokewidth=0,
-            markersize=5, label=lbl)
+    # Use sizehint! to prevent dynamic array resizing
+    for i in 1:3
+        sizehint!(xs[i], n)
+        sizehint!(ys[i], n)
+        sizehint!(vx_lines[i], n * 3) # 3 elements per line (start, end, NaN)
+        sizehint!(vy_lines[i], n * 3)
     end
 
-    for p in particles
-        col = sp_colors[p.species]
-        r   = radius(p)
+    # Collect all positions, ghosts, and velocities in one pass
+    @inbounds for p in particles
+        sp = p.species
+        r  = SPECIES[sp].radius
+        px, py = p.x, p.y
 
-        draw_x = [p.pos[1]]
-        draw_y = [p.pos[2]]
-        p.pos[1] < r             && push!(draw_x, p.pos[1] + box.width)
-        p.pos[1] > box.width - r && push!(draw_x, p.pos[1] - box.width)
-        p.pos[2] < r             && push!(draw_y, p.pos[2] + box.height)
-        p.pos[2] > box.height- r && push!(draw_y, p.pos[2] - box.height)
+        # ── OPTIMIZATION 2: Calculate ghosts without array allocations ──
+        # Use NaN to represent "no ghost needed"
+        gx = px < r ? px + box.width : (px > box.width - r ? px - box.width : NaN)
+        gy = py < r ? py + box.height : (py > box.height - r ? py - box.height : NaN)
 
-        for x in draw_x, y in draw_y
-            scatter!(plt, [x], [y];
-                markersize        = r * 0.55,
-                markercolor       = col,
-                markerstrokewidth = 0,
-                label             = false)
+        # Always push the primary particle
+        push!(xs[sp], px)
+        push!(ys[sp], py)
+
+        # Push edge ghosts (if they exist)
+        if !isnan(gx)
+            push!(xs[sp], gx)
+            push!(ys[sp], py)
+        end
+        if !isnan(gy)
+            push!(xs[sp], px)
+            push!(ys[sp], gy)
+        end
+        # Push corner ghosts (if both X and Y wrap)
+        if !isnan(gx) && !isnan(gy)
+            push!(xs[sp], gx)
+            push!(ys[sp], gy)
         end
 
-        # Velocity arrow
-        plot!(plt,
-            [p.pos[1], p.pos[1] + p.vel[1] * 1.2],
-            [p.pos[2], p.pos[2] + p.vel[2] * 1.2];
-            lc=col, lw=0.7, alpha=0.45, label=false)
+        # ── Group velocity arrows ──
+        push!(vx_lines[sp], px, px + p.vx * 1.2, NaN)
+        push!(vy_lines[sp], py, py + p.vy * 1.2, NaN)
+    end
+
+    sp_labels = [
+        "H₂O  (m=$(SPECIES[1].mass), r=$(SPECIES[1].radius), e=$(SPECIES[1].energy))",
+        "H₃O⁺ (m=$(SPECIES[2].mass), r=$(SPECIES[2].radius), e=$(SPECIES[2].energy))",
+        "OH⁻  (m=$(SPECIES[3].mass), r=$(SPECIES[3].radius), e=$(SPECIES[3].energy))",
+    ]
+
+    # Initialize the plot with all the styling
+    plt = plot(
+        xlims=(0, box.width), ylims=(0, box.height),
+        aspect_ratio=:equal, legend=:topright,
+        grid=false, framestyle=:box,
+        background_color_inside=:white, background_color=:white, foreground_color=:black,
+        title=@sprintf("step %d  |  rxn→: %d  |  rxn←: %d", step_idx, total_react_direct, total_react_reverse),
+        titlefontsize=9, size=(580, 580)
+    )
+
+    # Plot everything in exactly 6 calls (3 for arrows, 3 for particles)
+    for sp in 1:3
+        # Draw velocity arrows first so they render underneath the particles
+        if !isempty(vx_lines[sp])
+            plot!(plt, vx_lines[sp], vy_lines[sp];
+                  lc=SPECIES[sp].color, lw=0.7, alpha=0.45, label=false)
+        end
+
+        # Draw all particles and ghosts for this species
+        if !isempty(xs[sp])
+            scatter!(plt, xs[sp], ys[sp];
+                markercolor=SPECIES[sp].color,
+                markersize=SPECIES[sp].radius * 0.55,
+                markerstrokewidth=0,
+                label=sp_labels[sp])
+        end
     end
 
     return plt
@@ -67,43 +99,41 @@ function plot_thermodynamics(times, KE_hist, T_hist, p_hist;
                               path="thermodynamics.png")
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
-        left_margin  = 8Plots.mm,
-        bottom_margin = 4Plots.mm)
+        left_margin      = 8Plots.mm,
+        bottom_margin    = 4Plots.mm)
 
     plot!(plt[1], times, KE_hist;
-        lc=:steelblue, lw=1.5, legend=:topright,
-        label="KE", ylabel="Total KE",
+        lc=:steelblue, lw=1.5, label="KE", ylabel="Total KE",
         title="Thermodynamic observables — reactive ideal gas")
     hline!(plt[1], [mean(KE_hist)]; lc=:red, ls=:dash, lw=1, label="⟨KE⟩")
 
     plot!(plt[2], times, T_hist;
-        lc=:darkorange, lw=1.5, legend=:topright,
-        label="T", ylabel="Temperature")
+        lc=:darkorange, lw=1.5, label="T", ylabel="Temperature")
     hline!(plt[2], [mean(T_hist)]; lc=:red, ls=:dash, lw=1, label="⟨T⟩")
 
     plot!(plt[3], times, p_hist;
-        lc=:mediumseagreen, lw=1.2, legend=false,
-        ylabel="|p| total", label="|p|")
+        lc=:mediumseagreen, lw=1.2, ylabel="|p| total", label="|p|")
 
     savefig(plt, path)
     println("  Saved thermo     → $path")
     return plt
 end
 
-function plot_speed_distribution(particles::Vector{Particle}; T_eq=1.0, path="speed_dist.png")
-    sp_colors = [SPECIES[1].color, SPECIES[2].color, SPECIES[3].color]
-    sp_names  = [SPECIES[k].name for k in 1:3]
+function plot_speed_distribution(particles::Vector{Particle};
+                                  T_eq=1.0, path="speed_dist.png")
+    sp_colors = [SPECIES[k].color for k in 1:3]
+    sp_names  = [SPECIES[k].name  for k in 1:3]
 
     plt = plot(size=(700, 420),
         background_color = :white,
-        left_margin  = 6Plots.mm,
-        bottom_margin = 6Plots.mm,
-        title = "Speed distributions by species")
+        left_margin      = 6Plots.mm,
+        bottom_margin    = 6Plots.mm,
+        title            = "Speed distributions by species")
 
     for sp in 1:3
         group = filter(p -> p.species == sp, particles)
         isempty(group) && continue
-        speeds  = speed.(group)
+        speeds  = speed.(group)                          # uses scalar fields via speed()
         m       = SPECIES[sp].mass
         v_range = range(0, maximum(speeds)*1.4, length=300)
         mb      = (m ./ T_eq) .* v_range .* exp.(-(m .* v_range.^2) ./ (2T_eq))
@@ -126,27 +156,30 @@ function plot_speed_distribution(particles::Vector{Particle}; T_eq=1.0, path="sp
     return plt
 end
 
-function plot_population_equilibrium(times, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc;
-     path="population.png")
+function plot_population_equilibrium(times,
+        N_H2O_hist, N_H3O_hist, N_OH_hist,
+        KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
+        path="population.png")
+
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
-        left_margin  = 8Plots.mm,
-        bottom_margin = 4Plots.mm)
+        left_margin      = 8Plots.mm,
+        bottom_margin    = 4Plots.mm)
 
-    plot!(plt[1], times, N_H2O_hist; lc=:mediumseagreen,          lw=1.5, label="N_H2O",
+    plot!(plt[1], times, N_H2O_hist; lc=:mediumseagreen, lw=1.5, label="N_H₂O",
         ylabel="Population", xlabel="Time", legend=:topright)
-    plot!(plt[1], times, N_H3O_hist; lc=:tomato,  lw=1.5, label="N_H3O")
-    plot!(plt[1], times, N_OH_hist; lc=:cornflowerblue,  lw=1.5, label="N_OH")
+    plot!(plt[1], times, N_H3O_hist; lc=:tomato,         lw=1.5, label="N_H₃O⁺")
+    plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label="N_OH⁻")
 
-    plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen,          lw=1.5, label="KE_H2O",
+    plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O",
         ylabel="KE per species", xlabel="Time", legend=:topright)
-    plot!(plt[2], times, KE_H3O_hist; lc=:tomato,  lw=1.5, label="KE_H3O")
-    plot!(plt[2], times, KE_OH_hist; lc=:cornflowerblue,  lw=1.5, label="KE_OH")
+    plot!(plt[2], times, KE_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺")
+    plot!(plt[2], times, KE_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻")
 
-    plot!(plt[3], times, Kc; lc=:mediumseagreen,          lw=1.5, label="Kc",
-        ylabel="[H3O+][OH-]/[H2O]^2", xlabel="Time", legend=:topright)
+    plot!(plt[3], times, Kc_hist; lc=:mediumseagreen, lw=1.5, label="Kc",
+        ylabel="[H₃O⁺][OH⁻]/[H₂O]²", xlabel="Time", legend=:topright)
 
     savefig(plt, path)
-    println("  Saved population     → $path")
+    println("  Saved population → $path")
     return plt
 end
