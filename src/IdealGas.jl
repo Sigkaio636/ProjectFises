@@ -20,6 +20,8 @@ include("Visualization.jl")
 function init_particles(N_H2O::Int, N_H3O::Int, N_OH::Int, box::Box; T_init=2.0)
     N = N_H2O + N_H3O + N_OH
     species_list = vcat(fill(1, N_H2O), fill(2, N_H3O), fill(3, N_OH))
+    shuffle!(species_list)
+
 
     cols = ceil(Int, sqrt(N))
     rows = ceil(Int, N / cols)
@@ -151,14 +153,14 @@ function run(;
     gif(anim, anim_path; fps=20)
     println("  Saved animation  → $anim_path")
 
-    plot_thermodynamics(times, KE_hist, T_hist, p_hist;
+    plot_thermodynamics(times, dt, KE_hist, T_hist, p_hist;
         path=joinpath(out_dir, "thermodynamics.png"))
 
     T_eq = mean(T_hist[max(1, end÷2):end])
     plot_speed_distribution(particles; T_eq=T_eq,
         path=joinpath(out_dir, "speed_dist.png"))
 
-    plot_population_equilibrium(times, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
+    plot_population_equilibrium(times, dt, N_H2O_hist, N_H3O_hist, N_OH_hist, KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
         path=joinpath(out_dir, "population.png"))
 
     plot_kc_line(T_hist, Kc_hist;

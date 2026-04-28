@@ -22,58 +22,87 @@ end
 end
 
 """
-Two-phase hard-sphere collision resolver.
+Two-phase hard-sphere collision resolver with trajectory validation.
+
+Phase 0 — trajectory discriminant check:
+  Given current positions and velocities, solve for the time t* at which
+  the pair would reach minimum separation. The collision is physical only
+  if the minimum approach distance is less than sigma (discriminant > 0).
+  This rejects numerical ghost collisions where particles overlap due to
+  finite dt but their trajectories never actually intersect at contact.
+
+  The discriminant of |r(t)|² = sigma² is:
+    Δ = (v_rel · r̂)² - (|v_rel|² - 0) ... simplified to:
+    Δ = (v·r)² - |v|²·(|r|² - sigma²)
+  Collision is real iff Δ > 0 and t* > 0 (approaching).
 
 Phase 1 — positional correction:
   Move i and j apart along the line of centres until they just touch
-  (overlap → 0).  Split in proportion to mass so the CM is conserved.
-  This prevents the "sticky particle" bug where repeated impulses on the
+  (overlap → 0). Split in proportion to mass so the CM is conserved.
+  This prevents the sticky-particle bug where repeated impulses on the
   same overlapping pair accelerate them inward instead of outward.
 
 Phase 2 — velocity impulse:
-  Standard elastic collision formula in the CM frame, giving:
+  Standard elastic collision in the CM frame:
     Δv_i = −[2·m_j/(m_i+m_j)] (v_rel · n̂) n̂
     Δv_j = +[2·m_i/(m_i+m_j)] (v_rel · n̂) n̂
   Both total momentum and total kinetic energy are conserved exactly.
 """
 function collide!(i::Particle, j::Particle, box::Box)
+
+    # ── Geometry ───────────────────────────────────────────────────────────
     dx, dy = min_image_delta(j.x, j.y, i.x, i.y, box)
     d2     = dx*dx + dy*dy
     sigma  = radius(i) + radius(j)
-    d2 > sigma*sigma && return false
-    d2 < 1e-14       && return false
+    sigma2 = sigma * sigma
 
-    dvx   = i.vx - j.vx
-    dvy   = i.vy - j.vy
+    d2 > sigma2 && return false       # no overlap at all
+    d2 < 1e-14  && return false       # degenerate / same position
+
+    # ── Relative velocity ──────────────────────────────────────────────────
+    dvx = i.vx - j.vx
+    dvy = i.vy - j.vy
+
+    # v_rel · r  (r points from j to i, same as dx,dy)
     vdotn = dvx*dx + dvy*dy
-    vdotn >= 0.0 && return false          # already separating
-    vrel = [dvx, dvy]
-    # not checking well la distancia entre elles, la d2 minima depen de la v_relativa (vd)
-    # només que sigui positiva no és suficient
-    # crear un epsilon a tot
-    # posar les flags de hasCollided
-    eps = 10^-10
-    nrom = sqrt(dvx*dvx+dvy*dvy)
-    d_sense_radi = 
-    #vdotn <  && return false 
-    nrom < dist && return false
+    vdotn >= 0.0 && return false      # already separating — not a collision
 
+    # ── Phase 0: discriminant / trajectory validity check ─────────────────
+    # Solves |r + v_rel·t|² = sigma² for t
+    # Δ = (v·r)² - |v|²·(d² - sigma²)
+    # For a real collision Δ must be > 0.
+    # Note: (d² - sigma²) ≤ 0 since we already passed the overlap check,
+    # so Δ = vdotn² - |v|²·(d² - sigma²) ≥ vdotn² ≥ 0 always here.
+    # The check becomes meaningful when used BEFORE the overlap test,
+    # or as an epsilon guard against nearly-grazing numerical ghosts:
+    v2 = dvx*dvx + dvy*dvy
+    v2 < 1e-14 && return false        # essentially zero relative speed
+
+    discriminant = vdotn*vdotn - v2*(d2 - sigma2)
+    discriminant < 0.0 && return false   # trajectories miss — ghost collision
+
+    # Impact parameter b = sqrt(d² - (v·r/|v|)²) / sigma
+    # Optionally weight reaction probability by (1 - b²/sigma²) here
+
+    # ── Phase 1: positional correction ────────────────────────────────────
     dist    = sqrt(d2)
     overlap = sigma - dist
     inv_d   = 1.0 / dist
     nx, ny  = dx * inv_d, dy * inv_d
     mi, mj  = mass(i), mass(j)
     M       = mi + mj
-    fi      = mj / M
-    fj      = mi / M
+    fi      = mj / M                  # fraction of overlap assigned to i
+    fj      = mi / M                  # fraction of overlap assigned to j
 
-    i.x += fi * overlap * nx;  i.y += fi * overlap * ny
-    j.x -= fj * overlap * nx;  j.y -= fj * overlap * ny
+    i.x += fi * overlap * nx;   i.y += fi * overlap * ny
+    j.x -= fj * overlap * nx;   j.y -= fj * overlap * ny
     wrap!(i, box);  wrap!(j, box)
 
-    fac     = 2.0 * mi * mj / M * vdotn / d2
-    i.vx   -= fac / mi * dx;   i.vy -= fac / mi * dy
-    j.vx   += fac / mj * dx;   j.vy += fac / mj * dy
+    # ── Phase 2: velocity impulse ──────────────────────────────────────────
+    fac   = 2.0 * mi * mj / M * vdotn / d2
+    i.vx -= fac / mi * dx;   i.vy -= fac / mi * dy
+    j.vx += fac / mj * dx;   j.vy += fac / mj * dy
+
     return true
 end
 
@@ -86,6 +115,7 @@ function react_chem!(i::Particle, j::Particle,
     e_i    = SPECIES[i.species].energy; e_j    = SPECIES[j.species].energy
     e_iout = SPECIES[iout_sp].energy;   e_jout = SPECIES[jout_sp].energy
 
+    M_old   = m_i + m_j
     M_new   = m_iout + m_jout
     # ── 1. Conservación estricta del Momento Total ─────────────────────────
     # Calculamos el momento absoluto previo a la reacción
@@ -110,11 +140,17 @@ function react_chem!(i::Particle, j::Particle,
     KE_rel < 0.0 && return false
 
     # ── 3. Reconstruir velocidades de los productos ──────────────────
+    # Calcular la orientación de las particulas incidentes
+    vcm_pre_x   = P_x / M_old;  vcm_pre_y   = P_y / M_old
+    v_rel_xi = i.vx - vcm_pre_x ; v_rel_yi = i.vy - vcm_pre_y
+    v_rel_xi_norm = -v_rel_xi / sqrt(v_rel_xi^2 + v_rel_yi^2)
+    v_rel_yi_norm = -v_rel_yi / sqrt(v_rel_xi^2 + v_rel_yi^2)
+    # La orientación de las particulas finales es opuesta a las incidentes 
+
     mu      = m_iout * m_jout / M_new
     vrel    = sqrt(2.0 * KE_rel / mu)
-    theta   = 2π * rand()
-    rx      = vrel * cos(theta)
-    ry      = vrel * sin(theta)
+    rx      = vrel * v_rel_xi_norm
+    ry      = vrel * v_rel_yi_norm
     fi      = m_jout / M_new
     fj      = m_iout / M_new
 

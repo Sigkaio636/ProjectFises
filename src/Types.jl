@@ -12,9 +12,9 @@ struct SpeciesData
 end
 
 const SPECIES = (
-    SpeciesData(1.0, 2.0, 0.0, :springgreen3,   "H₂O" ),   # 1
-    SpeciesData(1.0, 2.0, 0.0, :red2,            "H₃O⁺"),   # 2
-    SpeciesData(1.0, 2.0, 0.0, :royalblue2,    "OH⁻" ),   # 3
+    SpeciesData(1.0, 0.5, 0.0, :springgreen3,   "H₂O" ),   # 1
+    SpeciesData(1.0, 0.5, 0.0, :red2,            "H₃O⁺"),   # 2
+    SpeciesData(1.0, 0.5, 0.0, :royalblue2,    "OH⁻" ),   # 3
 )
 
 # SoA-friendly flat struct: all fields are isbits → stack-allocated, no GC pressure
