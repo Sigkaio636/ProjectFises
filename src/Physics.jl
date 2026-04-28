@@ -47,6 +47,16 @@ function collide!(i::Particle, j::Particle, box::Box)
     dvy   = i.vy - j.vy
     vdotn = dvx*dx + dvy*dy
     vdotn >= 0.0 && return false          # already separating
+    vrel = [dvx, dvy]
+    # not checking well la distancia entre elles, la d2 minima depen de la v_relativa (vd)
+    # només que sigui positiva no és suficient
+    # crear un epsilon a tot
+    # posar les flags de hasCollided
+    eps = 10^-10
+    nrom = sqrt(dvx*dvx+dvy*dvy)
+    d_sense_radi = 
+    #vdotn <  && return false 
+    nrom < dist && return false
 
     dist    = sqrt(d2)
     overlap = sigma - dist
