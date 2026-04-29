@@ -204,11 +204,17 @@ function plot_kc_line(T_hist, Kc_hist;
         bottom_margin    = 4Plots.mm)
 
     lnKc  = log.(Kc_hist)
-    inv_T = 1.0 ./ T_hist
+    beta = 1.0 ./ T_hist
 
-    plot!(plt[1], inv_T[BURNOUT:end], lnKc[BURNOUT:end];
+    mu_beta = mean(beta) 
+    mu_lnKc = mean(lnKc)
+
+    slope = sum((beta .- mu_beta) .* (lnKc .- mu_lnKc)) / sum((beta .- mu_beta).^2)
+    @printf("slope = %.5f\n", slope)
+    
+    plot!(plt[1], beta[BURNOUT:end], lnKc[BURNOUT:end];
         lc=:steelblue, lw=1.5, xlabel="beta", ylabel="lnKc", marker='o', markersize=2,
-        title="ln Kc = -Deps beta")
+        label = @sprintf("slope = %.2f", slope), title="ln Kc = -Deps beta")
 
     savefig(plt, path)
 

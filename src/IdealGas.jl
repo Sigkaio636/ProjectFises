@@ -9,6 +9,7 @@ using Statistics
 using Printf
 using Plots
 using Random
+using Statistics
 using Base.Threads: @threads, nthreads, threadid
 gr()
 

@@ -12,7 +12,7 @@ IdealGas.run(
     N_OH        = 300,
     Lx          = 220.0,
     Ly          = 220.0,
-    T_init      = 1.0,
+    T_init      = 5.0,
     dt          = 0.05,
     n_steps     = 5000,
     p_react     = 1.0,
