@@ -202,7 +202,7 @@ Three-stage parallelized simulation step.  See module docstring for full
 physics and threading documentation.
 """
 function step!(particles::Vector{Particle}, box::Box,
-               dt::Float64, p_react::Float64)
+               dt::Float64, p_react_fw::Float64, p_react_rv::Float64)
     n  = length(particles)
     nt = nthreads()
     _ensure_thread_bufs!(nt)
@@ -285,14 +285,14 @@ function step!(particles::Vector{Particle}, box::Box,
         pj = particles[jj]
 
         if ev.kind == EV_REVERSE
-            if react_chem!(pi, pj, 1, 1, p_react)
+            if react_chem!(pi, pj, 1, 1, p_react_rv)
                 reacted[ii] = reacted[jj] = true
                 n_react_rev += 1
             else
                 collide!(pi, pj, box) && (n_elastic += 1)
             end    
         elseif ev.kind == EV_FORWARD
-            if react_chem!(pi, pj, 2, 3, p_react)
+            if react_chem!(pi, pj, 2, 3, p_react_fw)
                 reacted[ii] = reacted[jj] = true
                 n_react_fwd += 1
             else

@@ -183,10 +183,15 @@ function plot_population_equilibrium(times, dt,
     plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label=@sprintf("N_OH⁻ = %.2f ± %.2f", mean_H3O, std_H3O))
     vline!(plt[1], [BURNOUT*dt]; lc=:gray16, ls=:dot, lw=1, label="Burnout end")
 
-    plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O",
-        ylabel="KE per species", xlabel="Time", legend=:topright)
-    plot!(plt[2], times, KE_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺")
-    plot!(plt[2], times, KE_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻")
+    # plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O",
+    #     ylabel="KE per species", xlabel="Time", legend=:topright)
+    # plot!(plt[2], times, KE_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺")
+    # plot!(plt[2], times, KE_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻")
+
+    plot!(plt[2], times, KE_H2O_hist./N_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O /N",
+        ylabel="KE/Ns normalized", xlabel="Time", legend=:topright)
+    plot!(plt[2], times, KE_H3O_hist./N_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺ /N")
+    plot!(plt[2], times, KE_OH_hist./N_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻ /N")
 
     plot!(plt[3], times, log10.(max.(Kc_hist, eps())); lc=:darkgoldenrod1, lw=1.5, label="log10Kc",
         ylabel="log10 [H₃O⁺][OH⁻]/[H₂O]²", xlabel="Time", legend=:topright)

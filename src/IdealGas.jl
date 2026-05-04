@@ -68,7 +68,8 @@ function run(;
     T_init      = 2.0,
     dt          = 0.2,
     n_steps     = 800,
-    p_react     = 0.05,
+    p_react_fw  = 0.15,
+    p_react_rv  = 0.15,
     save_every  = 10,
     out_dir     = "reactive_gas_output",
     save_frames = false,
@@ -82,7 +83,7 @@ function run(;
     println("="^65)
     println("  Reactive Ideal Gas Simulation — Julia + Plots.jl")
     println("="^65)
-    @printf "  N_H2O=%d  N_H3O=%d  N_OH=%d  p_react=%.3f\n" N_H2O N_H3O N_OH p_react
+    @printf "  N_H2O=%d  N_H3O=%d  N_OH=%d  p_react_fw=%.3f  p_react_rv=%.3f\n" N_H2O N_H3O N_OH p_react_fw p_react_rv
     @printf "  box=%.0fx%.0f  T_init=%.2f  dt=%.3f  steps=%d\n\n" Lx Ly T_init dt n_steps
 
     # History
@@ -134,7 +135,7 @@ function run(;
     @printf "  Step %5d | KE=%8.3f | T=%.4f | NH2O=%d NH3O=%d NOH=%d\n" 0 d0.KE d0.T d0.N_H2O d0.N_H3O d0.N_OH
 
     for s in 1:n_steps
-        ne, nrd, nrr = step!(particles, box, dt, p_react)
+        ne, nrd, nrr = step!(particles, box, dt, p_react_fw, p_react_rv)
         total_elastic   += ne
         total_react_direct += nrd
         total_react_reverse += nrr
