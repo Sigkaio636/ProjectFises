@@ -19,7 +19,7 @@ IdealGas.run(
     p_react_rv      = 0.5,
     add_spe_every   = 100,
     amount_spe      = (0,0,2),
-    save_every      = 1, # Inf : to not generate the .gif -> just Statistics, VERY QUICK
+    save_every      = Inf, # Inf : to not generate the .gif -> just Statistics, VERY QUICK
     out_dir         = "valoration_output",
     save_frames     = false,
 )

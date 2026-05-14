@@ -99,8 +99,6 @@ end
 
 function plot_thermodynamics(times, dt, KE_hist, T_hist, p_hist;
                               path="thermodynamics.png")
-    println( count(isnan, KE_hist) )
-    println( count(isnan, T_hist) )
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
         left_margin      = 8Plots.mm,
@@ -170,10 +168,6 @@ function plot_population_equilibrium(times, dt,
         N_H2O_hist, N_H3O_hist, N_OH_hist,
         KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
         path="population.png")
-
-    println( count(isnan, N_H2O_hist) )
-    println( count(isnan, N_H3O_hist) )
-    println( count(isnan, N_OH_hist) )
 
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
