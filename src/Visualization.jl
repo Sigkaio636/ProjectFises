@@ -2,7 +2,7 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
-BURNOUT = 2500
+BURNOUT = 4500
 
 function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int,
                   total_react_direct::Int, total_react_reverse::Int)
@@ -99,6 +99,8 @@ end
 
 function plot_thermodynamics(times, dt, KE_hist, T_hist, p_hist;
                               path="thermodynamics.png")
+    println( count(isnan, KE_hist) )
+    println( count(isnan, T_hist) )
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
         left_margin      = 8Plots.mm,
@@ -169,6 +171,10 @@ function plot_population_equilibrium(times, dt,
         KE_H2O_hist, KE_H3O_hist, KE_OH_hist, Kc_hist;
         path="population.png")
 
+    println( count(isnan, N_H2O_hist) )
+    println( count(isnan, N_H3O_hist) )
+    println( count(isnan, N_OH_hist) )
+
     plt = plot(layout=(3,1), size=(750, 680),
         background_color = :white,
         left_margin      = 8Plots.mm,
@@ -208,8 +214,8 @@ function plot_kc_line(T_hist, Kc_hist;
         left_margin      = 8Plots.mm,
         bottom_margin    = 4Plots.mm)
 
-    lnKc  = log.(Kc_hist)
-    beta = 1.0 ./ T_hist
+    lnKc  = log.(Kc_hist[BURNOUT:end])
+    beta = 1.0 ./ T_hist[BURNOUT:end]
 
     mu_beta = mean(beta) 
     mu_lnKc = mean(lnKc)
@@ -217,7 +223,7 @@ function plot_kc_line(T_hist, Kc_hist;
     slope = sum((beta .- mu_beta) .* (lnKc .- mu_lnKc)) / sum((beta .- mu_beta).^2)
     @printf("slope = %.5f\n", slope)
     
-    plot!(plt[1], beta[BURNOUT:end], lnKc[BURNOUT:end];
+    plot!(plt[1], beta, lnKc;
         lc=:steelblue, lw=1.5, xlabel="beta", ylabel="lnKc", marker='o', markersize=2,
         label = @sprintf("slope = %.2f", slope), title="ln Kc = -Deps beta")
 
