@@ -215,7 +215,7 @@ function run(;
     plot_kc_line(T_hist, Kc_hist;
         path=joinpath(out_dir, "kc_line.png"))
 
-    plot_ph(times, dt, N_H3O_hist;
+    plot_ph(times, dt, N_H3O_hist, Lx, Ly;
         path=joinpath(out_dir, "pH.png"))
 
     println("\n  All outputs in: $(abspath(out_dir))/")

@@ -229,7 +229,7 @@ end
 
 
 function plot_ph(times, dt,
-        N_H3O_hist;
+        N_H3O_hist, Lx, Ly;
         path="pH.png")
 
     plt = plot(layout=(1,1), size=(750, 680),
@@ -237,8 +237,8 @@ function plot_ph(times, dt,
         left_margin      = 8Plots.mm,
         bottom_margin    = 4Plots.mm)
 
-    plot!(plt[1], times, log10.(N_H3O_hist); lc=:mediumseagreen, lw=1.5, label="pH",
-        ylabel="pH", xlabel="Time", legend=:topright)
+    plot!(plt[1], times, -log10.(N_H3O_hist./(Lx*Ly)); lc=:mediumseagreen, lw=1.5, label="pH",
+        ylabel="pH", xlabel="Time", legend=:topright, ylims=(0.5, 7))
 
 
     savefig(plt, path)
