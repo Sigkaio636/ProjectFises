@@ -226,3 +226,22 @@ function plot_kc_line(T_hist, Kc_hist;
     println("  Saved population → $path")
     return plt
 end
+
+
+function plot_ph(times, dt,
+        N_H3O_hist;
+        path="pH.png")
+
+    plt = plot(layout=(1,1), size=(750, 680),
+        background_color = :white,
+        left_margin      = 8Plots.mm,
+        bottom_margin    = 4Plots.mm)
+
+    plot!(plt[1], times, log10.(N_H3O_hist); lc=:mediumseagreen, lw=1.5, label="pH",
+        ylabel="pH", xlabel="Time", legend=:topright)
+
+
+    savefig(plt, path)
+    println("  Saved population → $path")
+    return plt
+end
