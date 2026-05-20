@@ -2,7 +2,7 @@
 # src/Visualization.jl
 # ─────────────────────────────────────────────────
 
-BURNOUT = 4500
+BURNOUT = 6000
 
 function snapshot(particles::Vector{Particle}, box::Box, step_idx::Int,
                   total_react_direct::Int, total_react_reverse::Int)
@@ -180,13 +180,8 @@ function plot_population_equilibrium(times, dt,
     mean_H3O = mean(N_H3O_hist[BURNOUT:end]); std_H3O = std(N_H3O_hist[BURNOUT:end])
     plot!(plt[1], times, N_H3O_hist; lc=:tomato,         lw=1.5, label=@sprintf("N_H₃O⁺ = %.2f ± %.2f", mean_H3O, std_H3O))
     mean_OH = mean(N_OH_hist[BURNOUT:end]); std_OH = std(N_OH_hist[BURNOUT:end])
-    plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label=@sprintf("N_OH⁻ = %.2f ± %.2f", mean_H3O, std_H3O))
+    plot!(plt[1], times, N_OH_hist;  lc=:cornflowerblue, lw=1.5, label=@sprintf("N_OH⁻ = %.2f ± %.2f", mean_OH, std_OH))
     vline!(plt[1], [BURNOUT*dt]; lc=:gray16, ls=:dot, lw=1, label="Burnout end")
-
-    # plot!(plt[2], times, KE_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O",
-    #     ylabel="KE per species", xlabel="Time", legend=:topright)
-    # plot!(plt[2], times, KE_H3O_hist; lc=:tomato,         lw=1.5, label="KE_H₃O⁺")
-    # plot!(plt[2], times, KE_OH_hist;  lc=:cornflowerblue, lw=1.5, label="KE_OH⁻")
 
     plot!(plt[2], times, KE_H2O_hist./N_H2O_hist; lc=:mediumseagreen, lw=1.5, label="KE_H₂O /N",
         ylabel="KE/Ns normalized", xlabel="Time", legend=:topright)
@@ -229,7 +224,7 @@ end
 
 
 function plot_ph(times, dt,
-        N_H3O_hist, Lx, Ly;
+        N_H3O_hist, N_OH_hist, Lx, Ly;
         path="pH.png")
 
     plt = plot(layout=(1,1), size=(750, 680),
@@ -238,7 +233,10 @@ function plot_ph(times, dt,
         bottom_margin    = 4Plots.mm)
 
     plot!(plt[1], times, -log10.(N_H3O_hist./(Lx*Ly)); lc=:mediumseagreen, lw=1.5, label="pH",
-        ylabel="pH", xlabel="Time", legend=:topright, ylims=(0.5, 7))
+        ylabel="pH", xlabel="Time", legend=:topright, ylims=(2, 5))
+
+    # plot!(plt[1], times, -log10.(N_OH_hist./(Lx*Ly)); lc=:cornflowerblue, lw=1.5, label="pOH",
+    #     ylabel="logConcentration", xlabel="Time", legend=:topright, ylims=(0.5, 7))
 
 
     savefig(plt, path)

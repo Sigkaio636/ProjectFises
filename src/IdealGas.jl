@@ -106,6 +106,7 @@ function run(;
     Lx              = 120.0,
     Ly              = 120.0,
     T_init          = 2.0,
+    T_extern        = 1.0,
     dt              = 0.2,
     n_steps         = 800,
     p_react_fw      = 0.15,
@@ -184,7 +185,7 @@ function run(;
         record!(s)
 
         if s % add_spe_every == 0
-            particles = add_particles(particles, amount_spe[1], amount_spe[2], amount_spe[3], box; T_init=T_init)
+            particles = add_particles(particles, amount_spe[1], amount_spe[2], amount_spe[3], box; T_init=T_extern)
         end
 
         if s % print_every == 0
@@ -215,7 +216,7 @@ function run(;
     plot_kc_line(T_hist, Kc_hist;
         path=joinpath(out_dir, "kc_line.png"))
 
-    plot_ph(times, dt, N_H3O_hist, Lx, Ly;
+    plot_ph(times, dt, N_H3O_hist, N_OH_hist, Lx, Ly;
         path=joinpath(out_dir, "pH.png"))
 
     println("\n  All outputs in: $(abspath(out_dir))/")
